@@ -1,9 +1,14 @@
 version: '3'
 services:
   nginx:
+    ports:
+      - 80:80
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./nginx.debug.conf:/etc/nginx/conf.d/default.conf
   webapp:
     scale: 0
+  server:
+    ports:
+      - 8080:8080

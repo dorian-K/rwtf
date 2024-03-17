@@ -3,8 +3,6 @@ services:
   nginx:
     image: nginx:mainline-alpine
     init: true
-    ports:
-      - 80:80
     volumes:
       - webapp-content:/usr/share/nginx/html
       - ./nginx.conf:/etc/nginx/conf.d/default.conf
@@ -15,8 +13,6 @@ services:
   server:
     build: server
     init: true
-    ports:
-      - 8080:8080
     depends_on:
       - mariadb
 
