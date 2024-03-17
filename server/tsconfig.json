@@ -1,0 +1,17 @@
+{
+    "compilerOptions": {
+        "target": "esnext", // Specify the ECMAScript target version
+        "module": "nodenext", // Specify the module system
+        "moduleResolution": "nodenext", // Specify module resolution strategy
+        "outDir": "./dist", // Specify the output directory for compiled files
+        "strict": true, // Enable strict type-checking
+        "esModuleInterop": true, // Enable compatibility with CommonJS modules
+        "sourceMap": true // Generate source maps for better debugging
+    },
+    "include": [
+        "src/**/*.ts" // Specify the files to be included in compilation
+    ],
+    "exclude": [
+        "node_modules" // Specify the files to be excluded from compilation
+    ]
+}

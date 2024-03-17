@@ -1,0 +1,39 @@
+version: '3'
+services:
+  nginx:
+    image: nginx:mainline-alpine
+    init: true
+    ports:
+      - 80:80
+    volumes:
+      - webapp-content:/usr/share/nginx/html
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - server
+      - webapp
+
+  server:
+    build: server
+    init: true
+    ports:
+      - 8080:8080
+    depends_on:
+      - mariadb
+
+  webapp:
+    build: webapp
+    volumes:
+      - webapp-content:/out
+
+  mariadb:
+    image: mariadb
+    environment:
+      - MYSQL_ROOT_PASSWORD=secret
+      - MYSQL_DATABASE=mydatabase
+      - MYSQL_USER=myuser
+      - MYSQL_PASSWORD=mypassword
+    volumes:
+      - ./mariadb-data:/var/lib/mysql
+
+volumes:
+  webapp-content:

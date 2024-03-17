@@ -1,0 +1,7 @@
+{
+  "extends": ["next/core-web-vitals", "plugin:prettier/recommended"],
+  "rules": {
+    "react/no-unescaped-entities": ["error", {"forbid": [">", "'", "}"]}],
+    "@next/next/no-img-element": "off"
+  }
+}
