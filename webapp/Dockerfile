@@ -20,4 +20,4 @@ RUN rm -rf /outbk/*
 RUN mv /app/out/ /outbk
 RUN rm -rf /app
 
-CMD rm -rf /out/* && cp -a /outbk/. /out && ls -la /out
+CMD rm -rf /out/* && cp -a /outbk/. /out

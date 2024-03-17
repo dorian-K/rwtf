@@ -1,6 +1,6 @@
 version: '3'
 services:
-  nginx:
+  rwtf_nginx:
     ports:
       - 80:80
     extra_hosts:

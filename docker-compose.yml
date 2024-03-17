@@ -1,6 +1,6 @@
 version: '3'
 services:
-  nginx:
+  rwtf_nginx:
     image: nginx:mainline-alpine
     init: true
     volumes:
@@ -9,12 +9,16 @@ services:
     depends_on:
       - server
       - webapp
+    networks:
+      - rwtf_network
 
   server:
     build: server
     init: true
     depends_on:
       - mariadb
+    networks:
+      - rwtf_network
 
   webapp:
     build: webapp
@@ -30,6 +34,12 @@ services:
       - MYSQL_PASSWORD=mypassword
     volumes:
       - ./mariadb-data:/var/lib/mysql
+    networks:
+      - rwtf_network
 
 volumes:
   webapp-content:
+
+networks:
+  rwtf_network:
+    external: true
