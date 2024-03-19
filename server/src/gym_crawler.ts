@@ -46,8 +46,8 @@ async function splitImg(img: sharp.Sharp): Promise<ImagePart[]> {
     const height = metadata.height ?? 0;
     for (let i = 0; i < width; i += 22) {
         const extractWidth = Math.min(22, width - i);
-        if (extractWidth <= 0) {
-            continue;
+        if (extractWidth < 20) {
+            continue; // Skip small parts
         }
         const part = await img
             .clone()
