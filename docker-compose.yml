@@ -21,6 +21,8 @@ services:
       - mariadb
     networks:
       - rwtf_network
+    environment:
+      - TZ=Europe/Berlin
 
   webapp:
     build: webapp
@@ -35,6 +37,7 @@ services:
       - MYSQL_DATABASE=mydatabase
       - MYSQL_USER=myuser
       - MYSQL_PASSWORD=mypassword
+      - TZ=Europe/Berlin
     volumes:
       - ./mariadb-data:/var/lib/mysql
     networks:
