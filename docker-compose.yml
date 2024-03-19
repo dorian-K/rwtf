@@ -3,6 +3,7 @@ services:
   rwtf_nginx:
     image: nginx:mainline-alpine
     init: true
+    restart: unless-stopped
     volumes:
       - webapp-content:/usr/share/nginx/html
       - ./nginx.conf:/etc/nginx/conf.d/default.conf
@@ -15,6 +16,7 @@ services:
   server:
     build: server
     init: true
+    restart: unless-stopped
     depends_on:
       - mariadb
     networks:
@@ -27,6 +29,7 @@ services:
 
   mariadb:
     image: mariadb
+    restart: unless-stopped
     environment:
       - MYSQL_ROOT_PASSWORD=secret
       - MYSQL_DATABASE=mydatabase
@@ -39,6 +42,7 @@ services:
 
 volumes:
   webapp-content:
+
 
 networks:
   rwtf_network:

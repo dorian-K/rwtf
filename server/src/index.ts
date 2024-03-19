@@ -5,16 +5,13 @@ import { PoolConnection } from "mariadb";
 const app = express();
 const port = 4000;
 
-async function gymCrawl() {
-    const num = await getAuslastungNumber();
-    // console.log(num);
-
-    // insert into db
+async function saveAuslastung(auslastung: number) {
     let conn: PoolConnection;
+
     getConnection()
         .then((c) => {
             conn = c;
-            return conn.query("INSERT INTO rwth_gym (auslastung) VALUES (?)", [num]);
+            return conn.query("INSERT INTO rwth_gym (auslastung) VALUES (?)", [auslastung]);
         })
         .then(() => {
             conn.end();
@@ -22,6 +19,16 @@ async function gymCrawl() {
         .catch((err) => {
             console.error(err);
             if (conn) conn.end();
+        });
+}
+
+async function gymCrawl() {
+    getAuslastungNumber()
+        .then((num) => {
+            return saveAuslastung(num);
+        })
+        .catch((err) => {
+            console.error(err);
         });
 }
 setInterval(gymCrawl, 1000 * 60 * 5); // 5 minutes
