@@ -7,26 +7,41 @@ import { useEffect, useState } from "react";
 const ReactApexChart = React.lazy(() => import("react-apexcharts"));
 
 export default function Home() {
-    const [gym, setGym] = useState<GymResponse["data"]>([]);
+    const [gym, setGym] = useState<GymResponse>();
+    const [error, setError] = useState<string>();
     const api = useBackendContext();
 
     useEffect(() => {
-        api.getGym().then((res) => {
-            setGym(res.data);
-        });
+        api.getGym()
+            .then((res) => {
+                setGym(res);
+            })
+            .catch((err) => {
+                setError(err);
+            });
     }, [api]);
 
-    if (gym.length === 0) {
+    if (error) {
+        return <div>Error: {error}</div>;
+    }
+
+    if (gym === undefined) {
         return <div>Loading...</div>;
     }
 
-    let data = gym.map((g) => ({
+    let data = gym.data.map((g) => ({
         ...g,
         created_at: Date.parse(g.created_at),
     }));
     data = data.sort((a, b) => a.created_at - b.created_at);
     let maxX = data[data.length - 1].created_at + 1000 * 60 * 60 * 6; // 6 hours
     let range = 1000 * 60 * 60 * 24; // 1 day
+
+    let dataAvg = gym.data_lastweek.map((g) => ({
+        ...g,
+        created_at: Date.parse(g.created_at) + 1000 * 60 * 60 * 24 * 7,
+    }));
+    dataAvg = dataAvg.sort((a, b) => a.created_at - b.created_at);
 
     const options: ApexOptions = {
         yaxis: {
@@ -39,6 +54,9 @@ export default function Home() {
             type: "datetime",
             min: maxX - range,
             max: maxX,
+            labels: {
+                datetimeUTC: false,
+            },
         },
         chart: {
             id: "gym",
@@ -78,6 +96,13 @@ export default function Home() {
         {
             name: "Auslastung",
             data: data.map((g) => ({
+                x: g.created_at,
+                y: g.auslastung,
+            })),
+        },
+        {
+            name: "Letzte Woche",
+            data: dataAvg.map((g) => ({
                 x: g.created_at,
                 y: g.auslastung,
             })),

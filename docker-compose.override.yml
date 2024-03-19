@@ -1,0 +1,9 @@
+version: '3'
+services:
+  rwtf_nginx:
+    depends_on:
+      - webapp
+  webapp:
+    build: webapp
+    volumes:
+      - webapp-content:/out

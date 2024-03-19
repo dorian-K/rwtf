@@ -31,15 +31,12 @@ async function gymCrawl() {
             console.error(err);
         });
 }
-setInterval(gymCrawl, 1000 * 60 * 5); // 5 minutes
-gymCrawl();
-
 app.get("/api/gym", async (req, res) => {
     let conn;
     try {
         conn = await getConnection();
         const rows = await conn.query(
-            "SELECT auslastung, created_at FROM rwth_gym ORDER BY created_at DESC LIMIT 1000"
+            "SELECT auslastung, created_at FROM rwth_gym WHERE created_at >= NOW() - INTERVAL 1 DAY ORDER BY created_at DESC LIMIT 1000"
         );
         const sanitized = rows.map((row: any) => {
             return {
@@ -47,8 +44,27 @@ app.get("/api/gym", async (req, res) => {
                 created_at: row.created_at,
             };
         });
+        const oneWeekAgo = new Date();
+        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+        oneWeekAgo.setHours(0, 0, 0, 0);
 
-        res.json({ data: sanitized });
+        const oneWeekAgoEnd = new Date();
+        oneWeekAgoEnd.setDate(oneWeekAgoEnd.getDate() - 7);
+        oneWeekAgoEnd.setHours(23, 59, 59, 999);
+
+        const rowsOneWeekAgo = await conn.query(
+            "SELECT auslastung, created_at FROM rwth_gym WHERE created_at >= ? AND created_at <= ?",
+            [oneWeekAgo, oneWeekAgoEnd]
+        );
+        // console.log(rowsOneWeekAgo);
+        const sanitizedOneWeekAgo = rowsOneWeekAgo.map((row: any) => {
+            return {
+                auslastung: row.auslastung,
+                created_at: row.created_at,
+            };
+        });
+
+        res.json({ data: sanitized, data_lastweek: sanitizedOneWeekAgo });
     } catch (err) {
         console.error(err);
         res.status(500).send("{error: true}");
@@ -69,6 +85,9 @@ getConnection()
         );
     })
     .then(() => {
+        setInterval(gymCrawl, 1000 * 60 * 5); // 5 minutes
+        gymCrawl();
+
         let server = app.listen(port, () => {
             console.log(`Example app listening on port ${port}`);
         });

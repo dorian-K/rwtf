@@ -1,5 +1,6 @@
 export interface GymResponse {
     data: { auslastung: number; created_at: string }[];
+    data_lastweek: { auslastung: number; created_at: string }[];
 }
 
 export class Backend {
