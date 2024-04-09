@@ -99,7 +99,6 @@ export default function Home() {
     const api = useBackendContext();
 
     const reloadData = () => {
-        setGym(undefined);
         setIsLoading(true);
         api.getGym()
             .then((res) => {
@@ -107,6 +106,7 @@ export default function Home() {
                 setError(undefined);
             })
             .catch((err) => {
+                setGym(undefined);
                 setError(err + "");
             })
             .then(() => {
