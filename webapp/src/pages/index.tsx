@@ -6,29 +6,7 @@ import { useEffect, useState } from "react";
 
 const ReactApexChart = React.lazy(() => import("react-apexcharts"));
 
-export default function Home() {
-    const [gym, setGym] = useState<GymResponse>();
-    const [error, setError] = useState<string>();
-    const api = useBackendContext();
-
-    useEffect(() => {
-        api.getGym()
-            .then((res) => {
-                setGym(res);
-            })
-            .catch((err) => {
-                setError(err);
-            });
-    }, [api]);
-
-    if (error) {
-        return <div>Error: {error}</div>;
-    }
-
-    if (gym === undefined) {
-        return <div>Loading...</div>;
-    }
-
+function ChartImpl({ gym }: { gym: GymResponse }) {
     let data = gym.data.map((g) => ({
         ...g,
         created_at: Date.parse(g.created_at),
@@ -110,16 +88,63 @@ export default function Home() {
     ];
 
     return (
+        <ReactApexChart type="area" width={"100%"} height={500} options={options} series={series} />
+    );
+}
+
+export default function Home() {
+    const [gym, setGym] = useState<GymResponse>();
+    const [error, setError] = useState<string>();
+    const [isLoading, setIsLoading] = useState(true);
+    const api = useBackendContext();
+
+    const reloadData = () => {
+        setGym(undefined);
+        setIsLoading(true);
+        api.getGym()
+            .then((res) => {
+                setGym(res);
+                setError(undefined);
+            })
+            .catch((err) => {
+                setError(err + "");
+            })
+            .then(() => {
+                setIsLoading(false);
+            });
+    };
+
+    useEffect(() => {
+        reloadData();
+
+        const tim = setInterval(() => {
+            reloadData();
+        }, 1000 * 60); // 1 minute
+
+        return () => {
+            clearInterval(tim);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [api]);
+
+    return (
         <div className="container">
             <div className="card mt-3">
                 <div className="card-body">
-                    <ReactApexChart
-                        type="area"
-                        width={"100%"}
-                        height={500}
-                        options={options}
-                        series={series}
-                    />
+                    {error && <div className="alert alert-danger">{error}</div>}
+
+                    {gym && <ChartImpl gym={gym} />}
+
+                    <div className="d-flex mt-3 ">
+                        <button
+                            className="btn btn-primary me-2"
+                            onClick={reloadData}
+                            disabled={isLoading}
+                        >
+                            Reload
+                        </button>
+                        {isLoading && <div className="spinner-border"></div>}
+                    </div>
                 </div>
             </div>
         </div>
