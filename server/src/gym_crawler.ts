@@ -41,49 +41,81 @@ async function getUptodatePic(): Promise<sharp.Sharp> {
 // Function to split image into parts
 async function splitImg(img: sharp.Sharp): Promise<ImagePart[]> {
     let metadata = await img.metadata();
-    const parts: ImagePart[] = [];
     const width = metadata.width ?? 0;
     const height = metadata.height ?? 0;
-    for (let i = 0; i < width; i += 22) {
-        const extractWidth = Math.min(22, width - i);
-        if (extractWidth < 20) {
-            continue; // Skip small parts
-        }
-        const part = await img
+
+    // find and remove empty columns (transparent)
+    let digitParts = []; // segments of digits
+    let digitStart = -1;
+
+    //console.log("### Splitting Image ###");
+    for (let i = 0; i < width; i++) {
+        const column = await img
             .clone()
-            .extract({
-                left: i,
-                top: 0,
-                width: extractWidth,
-                height: height,
-            })
-            .resize(22, 30, { kernel: sharp.kernel.nearest })
-            .toColorspace("b-w")
-            .blur(1)
-            .toBuffer()
-            .catch((error) => {
-                console.error("Error during image processing:", error);
-                return null;
-            });
-        if (part) {
-            parts.push({ width: 22, height: 30, data: part });
+            .extract({ left: i, top: 0, width: 1, height: height })
+            .extractChannel("alpha")
+            .raw()
+            .toBuffer();
+        const columnSum = column.reduce((acc, val) => acc + val, 0);
+        //console.log(`Column ${i}: ${column}`);
+        if (columnSum === 0) {
+            if (digitStart !== -1) {
+                digitParts.push({ start: digitStart, end: i });
+                digitStart = -1;
+            }
+        } else {
+            if (digitStart === -1) {
+                digitStart = i;
+            }
         }
     }
-    return parts;
-}
+    if (digitStart !== -1) {
+        digitParts.push({ start: digitStart, end: width });
+    }
+    // print
+    // console.log(digitParts);
 
-// Function to get pictures from filesystem
-/*function getPicsFromFs(): Record<string, sharp.Sharp> {
-    const pics: Record<string, sharp.Sharp> = {};
-    const dir = "./pics";
-    fs.readdirSync(dir).forEach((filename) => {
-        if (filename.endsWith(".gif")) {
-            const image = sharp(path.join(dir, filename));
-            pics[filename.split(".")[0]] = image;
-        }
-    });
-    return pics;
-}*/
+    img = img.toColorspace("b-w");
+    // force white background
+    img = img.flatten({ background: "#FFFFFF" });
+
+    return await Promise.all(
+        digitParts.map(async (prt) => {
+            const extractWidth = Math.min(22, prt.end - prt.start);
+            if (extractWidth < 8) {
+                throw new Error("Extracted width too small");
+            }
+            if (extractWidth > 22) {
+                throw new Error("Extracted width too large");
+            }
+            const part = await img
+                .clone()
+                .extract({
+                    left: prt.start,
+                    top: 0,
+                    width: extractWidth,
+                    height: height,
+                })
+                .resize(22, 30, {
+                    kernel: sharp.kernel.lanczos3,
+                    fit: "contain",
+                    position: "center",
+                    background: "#FFFFFF",
+                })
+                .toColorspace("b-w")
+                .blur(1)
+                .toBuffer()
+                .catch((error) => {
+                    console.error("Error during image processing:", error);
+                    return null;
+                });
+            if (part) {
+                return { width: 22, height: 30, data: part };
+            }
+            throw new Error("Error during image processing");
+        })
+    );
+}
 
 // Function to make a synthetic digit
 function makeSyntheticDigit(character: string): sharp.Sharp {
@@ -186,11 +218,11 @@ async function matchNumber(
     return [matchedNumber, minDiff];
 }
 
-async function getAuslastungAndMatchNumbers(): Promise<[number, number][]> {
-    let auslastung = await getUptodatePic();
-    auslastung = auslastung.toColorspace("b-w");
-    // force white background
-    auslastung = auslastung.flatten({ background: "#FFFFFF" });
+export async function getAuslastungAndMatchNumbers(
+    pic: sharp.Sharp,
+    debug = undefined as string | undefined
+): Promise<[number, number][]> {
+    let auslastung = pic;
     // save to disk
     //auslastung.toFile("./pics/auslastung.gif");
     const numbers = await getNumbersSynthetic();
@@ -198,7 +230,7 @@ async function getAuslastungAndMatchNumbers(): Promise<[number, number][]> {
     const auslastungParts = await splitImg(auslastung);
     // save to disk
     for (let i = 0; i < auslastungParts.length; i++) {
-        //sharp(auslastungParts[i].data).toFile(`./pics/auslastung_${i}.gif`);
+        if (debug) sharp(auslastungParts[i].data).toFile(`./pics/auslastung_${debug}_${i}.gif`);
     }
     const reconstructedDigits: [number, number][] = [];
 
@@ -211,7 +243,8 @@ async function getAuslastungAndMatchNumbers(): Promise<[number, number][]> {
 }
 
 export default async function getAuslastungNumber(): Promise<number> {
-    const reconstructedDigits = await getAuslastungAndMatchNumbers();
+    const pic = await getUptodatePic();
+    const reconstructedDigits = await getAuslastungAndMatchNumbers(pic);
     return parseInt(reconstructedDigits.map((digit) => digit[0].toString()).join(""));
 }
 
