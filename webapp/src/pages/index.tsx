@@ -38,6 +38,7 @@ function ChartImpl({ gym }: { gym: GymResponse }) {
         },
         chart: {
             id: "gym",
+            type: "area",
             animations: {
                 enabled: false,
             },
@@ -47,6 +48,8 @@ function ChartImpl({ gym }: { gym: GymResponse }) {
         },
         stroke: {
             curve: "smooth",
+            width: [3, 2],
+            dashArray: [0, 2],
         },
         title: {
             text: "RWTH Gym Auslastung",
@@ -68,11 +71,16 @@ function ChartImpl({ gym }: { gym: GymResponse }) {
                 },
             },
         },
+        fill: {
+            type: "solid",
+            opacity: [0.3, 0.05],
+        },
     };
 
     const series: ApexAxisChartSeries = [
         {
             name: "Auslastung",
+            zIndex: 1,
             data: data.map((g) => ({
                 x: g.created_at,
                 y: g.auslastung,
@@ -80,6 +88,7 @@ function ChartImpl({ gym }: { gym: GymResponse }) {
         },
         {
             name: "Letzte Woche",
+            zIndex: 0,
             data: dataAvg.map((g) => ({
                 x: g.created_at,
                 y: g.auslastung,

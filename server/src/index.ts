@@ -2,6 +2,7 @@ import express from "express";
 import pool, { getConnection } from "./db.js";
 import getAuslastungNumber from "./gym_crawler.js";
 import { PoolConnection } from "mariadb";
+import { SAMPLE } from "./sample_data.js";
 const app = express();
 const port = 4000;
 
@@ -32,6 +33,8 @@ async function gymCrawl() {
         });
 }
 app.get("/api/gym", async (req, res) => {
+    //if (true) return res.json(SAMPLE);
+
     let conn;
     try {
         conn = await getConnection();
