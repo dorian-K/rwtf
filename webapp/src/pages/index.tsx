@@ -12,7 +12,7 @@ function ChartImpl({ gym }: { gym: GymResponse }) {
         created_at: Date.parse(g.created_at),
     }));
     data = data.sort((a, b) => a.created_at - b.created_at);
-    let maxX = data[data.length - 1].created_at + 1000 * 60 * 60 * 6; // 6 hours
+    let maxX = data[data.length - 1].created_at + 1000 * 60 * 60 * 10; // 10 hours
     let range = 1000 * 60 * 60 * 24; // 1 day
 
     let dataAvg = gym.data_lastweek.map((g) => ({
