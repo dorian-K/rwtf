@@ -58,7 +58,7 @@ function ChartImpl({ gym }: { gym: GymResponse }) {
             dashArray: [0].concat(new Array(historicData.length).fill(2)),
         },
         title: {
-            text: "RWTH Gym Auslastung",
+            text: "RWTH Gym Auslastung (https://rwtf.dorianko.ch/)",
             align: "left",
         },
         theme: {
