@@ -7,35 +7,36 @@ import { useEffect, useState } from "react";
 const ReactApexChart = React.lazy(() => import("react-apexcharts"));
 
 function ChartImpl({ gym }: { gym: GymResponse }) {
-    let data = gym.data.map((g) => ({
+    let data = gym.data_today.map((g) => ({
         ...g,
         created_at: Date.parse(g.created_at),
     }));
     data = data.sort((a, b) => a.created_at - b.created_at);
 
-    let dataLastWeek = gym.data_lastweek.map((g) => ({
-        ...g,
-        created_at: Date.parse(g.created_at) + 1000 * 60 * 60 * 24 * 7,
-    }));
-    dataLastWeek = dataLastWeek.sort((a, b) => a.created_at - b.created_at);
+    gym.data_historic = gym.data_historic || [];
+    let historicData = gym.data_historic.map((week, index) =>
+        week
+            .map((g) => ({
+                ...g,
+                created_at: Date.parse(g.created_at) + 1000 * 60 * 60 * 24 * 7 * (index + 1),
+            }))
+            .sort((a, b) => a.created_at - b.created_at),
+    );
 
     // let maxX = data[data.length - 1].created_at + 1000 * 60 * 60 * 10; // 10 hours
-    let maxX = Math.max(
-        dataLastWeek[dataLastWeek.length - 1].created_at,
-        data[data.length - 1].created_at,
-    );
-    let range = 1000 * 60 * 60 * 24; // 1 day
+    let minX = new Date(data[data.length - 1].created_at).setHours(4, 0, 0, 0);
+    let maxX = new Date(data[data.length - 1].created_at).setHours(23, 59, 59, 999);
 
     const options: ApexOptions = {
         yaxis: {
             min: 0,
-            max: (max) => Math.max(150, Math.ceil(max / 10) * 10),
+            max: (max) => Math.max(160, Math.ceil(max / 10) * 10),
             decimalsInFloat: 0,
             tickAmount: 6,
         },
         xaxis: {
             type: "datetime",
-            min: maxX - range,
+            min: minX,
             max: maxX,
             labels: {
                 datetimeUTC: false,
@@ -53,8 +54,8 @@ function ChartImpl({ gym }: { gym: GymResponse }) {
         },
         stroke: {
             curve: "smooth",
-            width: [3, 2],
-            dashArray: [0, 2],
+            width: [3].concat(new Array(historicData.length).fill(2)),
+            dashArray: [0].concat(new Array(historicData.length).fill(2)),
         },
         title: {
             text: "RWTH Gym Auslastung",
@@ -78,11 +79,11 @@ function ChartImpl({ gym }: { gym: GymResponse }) {
         },
         fill: {
             type: "solid",
-            opacity: [0.3, 0.05],
+            opacity: [0.3].concat(new Array(historicData.length).fill(0.05)),
         },
     };
 
-    const series: ApexAxisChartSeries = [
+    let series: ApexAxisChartSeries = [
         {
             name: "Auslastung",
             zIndex: 1,
@@ -91,15 +92,16 @@ function ChartImpl({ gym }: { gym: GymResponse }) {
                 y: g.auslastung,
             })),
         },
-        {
-            name: "Letzte Woche",
-            zIndex: 0,
-            data: dataLastWeek.map((g) => ({
+    ];
+    series = series.concat(
+        historicData.map((week, index) => ({
+            name: `${index + 1} Week/s ago`,
+            data: week.map((g) => ({
                 x: g.created_at,
                 y: g.auslastung,
             })),
-        },
-    ];
+        })),
+    );
 
     return (
         <ReactApexChart type="area" width={"100%"} height={500} options={options} series={series} />

@@ -32,42 +32,35 @@ async function gymCrawl() {
             console.error(err);
         });
 }
-app.get("/api/gym", async (req, res) => {
-    //if (true) return res.json(SAMPLE);
-
+app.get("/api/v1/gym", async (req, res) => {
     let conn;
     try {
         conn = await getConnection();
-        const rows = await conn.query(
-            "SELECT auslastung, created_at FROM rwth_gym WHERE created_at >= NOW() - INTERVAL 1 DAY ORDER BY created_at DESC LIMIT 1000"
-        );
-        const sanitized = rows.map((row: any) => {
-            return {
-                auslastung: row.auslastung,
-                created_at: row.created_at,
-            };
-        });
-        const oneWeekAgo = new Date();
-        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-        oneWeekAgo.setHours(0, 0, 0, 0);
+        let weeks = [];
+        for(let i = 0; i <= 3; i++){
+            const startDate = new Date();
+            startDate.setDate(startDate.getDate() - i * 7);
+            startDate.setHours(4, 0, 0, 0);
 
-        const oneWeekAgoEnd = new Date();
-        oneWeekAgoEnd.setDate(oneWeekAgoEnd.getDate() - 7);
-        oneWeekAgoEnd.setHours(23, 59, 59, 999);
+            const endDate = new Date();
+            endDate.setDate(endDate.getDate() - i * 7);
+            endDate.setHours(23, 59, 59, 999);
 
-        const rowsOneWeekAgo = await conn.query(
-            "SELECT auslastung, created_at FROM rwth_gym WHERE created_at >= ? AND created_at <= ?",
-            [oneWeekAgo, oneWeekAgoEnd]
-        );
-        // console.log(rowsOneWeekAgo);
-        const sanitizedOneWeekAgo = rowsOneWeekAgo.map((row: any) => {
-            return {
-                auslastung: row.auslastung,
-                created_at: row.created_at,
-            };
-        });
+            const rows = await conn.query(
+                "SELECT auslastung, created_at FROM rwth_gym WHERE created_at >= ? AND created_at <= ? LIMIT 500",
+                [startDate, endDate]
+            );
+            
+            const sanitized = rows.map((row: any) => {
+                return {
+                    auslastung: row.auslastung,
+                    created_at: row.created_at,
+                };
+            });
+            weeks.push(sanitized);
+        }
 
-        res.json({ data: sanitized, data_lastweek: sanitizedOneWeekAgo });
+        res.json({ data_today: weeks[0], data_historic: weeks.slice(1) });
     } catch (err) {
         console.error(err);
         res.status(500).send("{error: true}");

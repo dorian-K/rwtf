@@ -1,4 +1,3 @@
-version: '3'
 services:
   rwtf_nginx:
     ports:
@@ -20,5 +19,3 @@ services:
       - TZ=Europe/Berlin
     ports:
       - 8081:80
-    networks:
-      - rwtf_network

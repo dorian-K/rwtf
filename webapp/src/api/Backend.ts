@@ -1,6 +1,11 @@
+export interface GymDataPiece {
+    auslastung: number;
+    created_at: string;
+}
+
 export interface GymResponse {
-    data: { auslastung: number; created_at: string }[];
-    data_lastweek: { auslastung: number; created_at: string }[];
+    data_today: GymDataPiece[];
+    data_historic: GymDataPiece[][];
 }
 
 export class Backend {
@@ -26,6 +31,6 @@ export class Backend {
     }
 
     getGym(): Promise<GymResponse> {
-        return this.processResponse(this.fetch("/api/gym"));
+        return this.processResponse(this.fetch("/api/v1/gym"));
     }
 }
