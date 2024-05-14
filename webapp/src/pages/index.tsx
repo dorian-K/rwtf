@@ -24,8 +24,12 @@ function ChartImpl({ gym }: { gym: GymResponse }) {
     );
 
     // let maxX = data[data.length - 1].created_at + 1000 * 60 * 60 * 10; // 10 hours
-    let minX = new Date(data[data.length - 1].created_at).setHours(4, 0, 0, 0);
-    let maxX = new Date(data[data.length - 1].created_at).setHours(23, 59, 59, 999);
+    let minX = undefined,
+        maxX = undefined;
+    if (data.length > 0) {
+        minX = new Date(data[data.length - 1].created_at).setHours(6, 0, 0, 0);
+        maxX = new Date(data[data.length - 1].created_at).setHours(23, 59, 59, 999);
+    }
 
     const options: ApexOptions = {
         yaxis: {
@@ -58,7 +62,7 @@ function ChartImpl({ gym }: { gym: GymResponse }) {
             dashArray: [0].concat(new Array(historicData.length).fill(2)),
         },
         title: {
-            text: "RWTH Gym Auslastung (https://rwtf.dorianko.ch/)",
+            text: "RWTH Gym Auslastung",
             align: "left",
         },
         theme: {
@@ -80,6 +84,18 @@ function ChartImpl({ gym }: { gym: GymResponse }) {
         fill: {
             type: "solid",
             opacity: [0.3].concat(new Array(historicData.length).fill(0.05)),
+        },
+        annotations: {
+            texts: [
+                {
+                    x: 200,
+                    y: 100,
+                    text: "rwtf.dorianko.ch",
+                    textAnchor: "start",
+                    fontSize: "30px",
+                    foreColor: "#888",
+                },
+            ],
         },
     };
 
@@ -112,11 +128,14 @@ export default function Home() {
     const [gym, setGym] = useState<GymResponse>();
     const [error, setError] = useState<string>();
     const [isLoading, setIsLoading] = useState(true);
+    const [dayoffset, setDayoffset] = useState(0);
     const api = useBackendContext();
+
+    const days = ["Today", "+1 day", "+2 days", "+3 days"];
 
     const reloadData = () => {
         setIsLoading(true);
-        api.getGym()
+        api.getGym(dayoffset)
             .then((res) => {
                 setGym(res);
                 setError(undefined);
@@ -133,24 +152,40 @@ export default function Home() {
     useEffect(() => {
         reloadData();
 
-        const tim = setInterval(() => {
-            reloadData();
-        }, 1000 * 60); // 1 minute
+        const tim = setInterval(
+            () => {
+                reloadData();
+            },
+            1000 * 60 * 4,
+        ); // 4 minutes
 
         return () => {
             clearInterval(tim);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [api]);
+    }, [api, dayoffset]);
+
+    useEffect(() => {
+        //import("bootstrap/js/dist/");
+    }, []);
 
     return (
         <div className="container">
             <div className="card mt-3">
+                <div className="card-header">
+                    RWTH Gym Auslastung (
+                    <a href="https://buchung.hsz.rwth-aachen.de/angebote/aktueller_zeitraum/_Auslastung.html">
+                        Datenquelle
+                    </a>
+                    ,{" "}
+                    <a href="https://hochschulsport.rwth-aachen.de/cms/HSZ/Sport/Sportanlagen/Sportzentrum-Koenigshuegel/~jpwb/RWTH-GYM/">
+                        Öffnungszeiten
+                    </a>
+                    )
+                </div>
                 <div className="card-body">
                     {error && <div className="alert alert-danger">{error}</div>}
-
                     {gym && <ChartImpl gym={gym} />}
-
                     <div className="d-flex mt-3 ">
                         <button
                             className="btn btn-primary me-2"
@@ -159,7 +194,27 @@ export default function Home() {
                         >
                             Reload
                         </button>
+                        <div className="btn-group" role="group">
+                            {days.map((d, index) => (
+                                <button
+                                    key={index}
+                                    type="button"
+                                    className={`btn btn-outline-secondary ${
+                                        dayoffset === index ? "active" : ""
+                                    }`}
+                                    onClick={() => setDayoffset(index)}
+                                >
+                                    {d}
+                                </button>
+                            ))}
+                        </div>
                         {isLoading && <div className="spinner-border"></div>}
+                    </div>
+                    <div className="mt-2">
+                        <small>
+                            This Website is{" "}
+                            <a href="https://github.com/dorian-K/rwtf">open-source</a>!
+                        </small>
                     </div>
                 </div>
             </div>

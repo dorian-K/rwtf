@@ -30,7 +30,7 @@ export class Backend {
             });
     }
 
-    getGym(): Promise<GymResponse> {
-        return this.processResponse(this.fetch("/api/v1/gym"));
+    getGym(dayoffset: number): Promise<GymResponse> {
+        return this.processResponse(this.fetch("/api/v1/gym?dayoffset=" + dayoffset));
     }
 }
