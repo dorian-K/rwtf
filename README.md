@@ -8,4 +8,4 @@ Run in two shells:
 
 `cd webapp && npm run dev`
 
-The webapp will be hosted on port 80, so open https://localhost/ in your browser
+The webapp will be hosted on port 80, so open http://localhost/ in your browser

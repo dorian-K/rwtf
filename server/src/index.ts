@@ -44,31 +44,52 @@ app.get("/api/v1/gym", async (req, res) => {
     let conn;
     try {
         conn = await getConnection();
-        let weeks = [];
-        for (let i = 0; i <= 3; i++) {
-            const startDate = new Date();
-            startDate.setDate(startDate.getDate() - i * 7 + dayoffset);
-            startDate.setHours(6, 0, 0, 0);
+        let startTime = new Date();
+        let response: any;
+        if (false) {
+            response = SAMPLE;
+        } else {
+            let weeks = [];
+            for (let i = 0; i <= 5; i++) {
+                const startDate = new Date();
+                startDate.setDate(startDate.getDate() - i * 7 + dayoffset);
+                startDate.setHours(6, 0, 0, 0);
 
-            const endDate = new Date();
-            endDate.setDate(endDate.getDate() - i * 7 + dayoffset);
-            endDate.setHours(23, 59, 59, 999);
+                const endDate = new Date();
+                endDate.setDate(endDate.getDate() - i * 7 + dayoffset);
+                endDate.setHours(23, 59, 59, 999);
 
-            const rows = await conn.query(
-                "SELECT auslastung, created_at FROM rwth_gym WHERE created_at >= ? AND created_at <= ? LIMIT 500",
-                [startDate, endDate]
-            );
+                const rows = await conn.query(
+                    "SELECT auslastung, created_at FROM rwth_gym WHERE created_at >= ? AND created_at <= ? LIMIT 500",
+                    [startDate, endDate]
+                );
 
-            const sanitized = rows.map((row: any) => {
-                return {
-                    auslastung: row.auslastung,
-                    created_at: row.created_at,
-                };
-            });
-            weeks.push(sanitized);
+                const sanitized = rows.map((row: any) => {
+                    return {
+                        auslastung: row.auslastung,
+                        created_at: row.created_at,
+                    };
+                });
+                weeks.push(sanitized);
+            }
+
+            response = {
+                data_today: weeks[0],
+                data_historic: weeks.slice(1),
+                dayoffset: dayoffset,
+            };
         }
 
-        res.json({ data_today: weeks[0], data_historic: weeks.slice(1), dayoffset: dayoffset });
+        let endTime = new Date();
+        let queryMs = endTime.getTime() - startTime.getTime();
+
+        // caching
+        res.setHeader("Cache-Control", "public, max-age=60"); // 1 minute
+
+        res.json({
+            ...response,
+            queryMs: queryMs,
+        });
     } catch (err) {
         console.error(err);
         res.status(500).send("{error: true}");

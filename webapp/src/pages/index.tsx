@@ -7,6 +7,18 @@ import { useEffect, useState } from "react";
 const ReactApexChart = React.lazy(() => import("react-apexcharts"));
 
 function ChartImpl({ gym }: { gym: GymResponse }) {
+    const chartRef = React.createRef<any>();
+
+    // hide historic data by default
+    useEffect(() => {
+        if (chartRef.current) {
+            for (let i = 0; i < gym.data_historic.length; i++) {
+                chartRef.current.chart.hideSeries(`${i + 1} Week/s ago`);
+            }
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [chartRef]);
+
     let data = gym.data_today.map((g) => ({
         ...g,
         created_at: Date.parse(g.created_at),
@@ -23,12 +35,61 @@ function ChartImpl({ gym }: { gym: GymResponse }) {
             .sort((a, b) => a.created_at - b.created_at),
     );
 
-    // let maxX = data[data.length - 1].created_at + 1000 * 60 * 60 * 10; // 10 hours
-    let minX = undefined,
-        maxX = undefined;
+    let minX, maxX;
+    let historicAvg = [];
+
     if (data.length > 0) {
         minX = new Date(data[data.length - 1].created_at).setHours(6, 0, 0, 0);
         maxX = new Date(data[data.length - 1].created_at).setHours(23, 59, 59, 999);
+    } else if (historicData.length > 0) {
+        minX = new Date(historicData[historicData.length - 1][0].created_at).setHours(6, 0, 0, 0);
+        maxX = new Date(historicData[historicData.length - 1][0].created_at).setHours(
+            23,
+            59,
+            59,
+            999,
+        );
+    } else {
+        return <div>No data</div>;
+    }
+
+    // funny code to calculate historic average
+    // this is complicated because the data is not aligned to a grid in the time dimension
+    let hrs = Math.round((maxX - minX) / (1000 * 60 * 60));
+    let lastVals = new Array(historicData.length).fill(0);
+    for (let min = 0; min < hrs * 60; min += 5) {
+        let time = +new Date(minX + min * 60 * 1000);
+        let avg = 0;
+        let count = 0;
+        for (let w = 0; w < historicData.length; w++) {
+            let week = historicData[w];
+            let nextTime = lastVals[w];
+            while (nextTime < week.length && week[nextTime].created_at < time) {
+                nextTime++;
+            }
+            // linear interpolation
+            if (nextTime > 0 && nextTime < week.length) {
+                const a = week[nextTime - 1];
+                const b = week[nextTime];
+                const x = (time - a.created_at) / (b.created_at - a.created_at);
+                if (x < 0 || x > 1) {
+                    console.error("x out of bounds", x);
+                }
+                avg += a.auslastung + x * (b.auslastung - a.auslastung);
+                count++;
+            } else if (nextTime === 0) {
+                avg += week[nextTime].auslastung;
+                count++;
+            } else if (nextTime === week.length) {
+                avg += week[nextTime - 1].auslastung;
+                count++;
+            }
+            lastVals[w] = nextTime;
+        }
+        if (count > 0) {
+            avg /= count;
+        }
+        historicAvg.push({ created_at: time, auslastung: avg });
     }
 
     const options: ApexOptions = {
@@ -58,8 +119,8 @@ function ChartImpl({ gym }: { gym: GymResponse }) {
         },
         stroke: {
             curve: "smooth",
-            width: [3].concat(new Array(historicData.length).fill(2)),
-            dashArray: [0].concat(new Array(historicData.length).fill(2)),
+            width: [3, 2].concat(new Array(historicData.length).fill(1)),
+            dashArray: [0, 1].concat(new Array(historicData.length).fill(3)),
         },
         title: {
             text: "RWTH Gym Auslastung",
@@ -83,14 +144,14 @@ function ChartImpl({ gym }: { gym: GymResponse }) {
         },
         fill: {
             type: "solid",
-            opacity: [0.3].concat(new Array(historicData.length).fill(0.05)),
+            opacity: [0.4, 0.15].concat(new Array(historicData.length).fill(0.02)),
         },
         annotations: {
             texts: [
                 {
                     x: 200,
                     y: 100,
-                    text: "rwtf.dorianko.ch",
+                    text: "https://rwtf.dorianko.ch/",
                     textAnchor: "start",
                     fontSize: "30px",
                     foreColor: "#888",
@@ -108,6 +169,13 @@ function ChartImpl({ gym }: { gym: GymResponse }) {
                 y: g.auslastung,
             })),
         },
+        {
+            name: "Historic Avg",
+            data: historicAvg.map((g) => ({
+                x: g.created_at,
+                y: g.auslastung,
+            })),
+        },
     ];
     series = series.concat(
         historicData.map((week, index) => ({
@@ -120,7 +188,14 @@ function ChartImpl({ gym }: { gym: GymResponse }) {
     );
 
     return (
-        <ReactApexChart type="area" width={"100%"} height={500} options={options} series={series} />
+        <ReactApexChart
+            type="area"
+            width={"100%"}
+            height={500}
+            options={options}
+            series={series}
+            ref={chartRef}
+        />
     );
 }
 
