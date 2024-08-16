@@ -3,7 +3,9 @@ import pool, { getConnection } from "./db.js";
 import getAuslastungNumber from "./gym_crawler.js";
 import { PoolConnection } from "mariadb";
 import { SAMPLE } from "./sample_data.js";
+import { downloadStreamFile, isAachener } from "./study.js";
 const app = express();
+app.set("trust proxy", ["loopback", "linklocal", "uniquelocal"]);
 const port = 4000;
 
 async function saveAuslastung(auslastung: number) {
@@ -95,6 +97,15 @@ app.get("/api/v1/gym", async (req, res) => {
         res.status(500).send("{error: true}");
     } finally {
         if (conn) conn.end();
+    }
+});
+
+app.get("/api/v1/study", downloadStreamFile);
+app.get("/api/v1/is_aachen", async (req, res) => {
+    if (await isAachener(req, res)) {
+        res.json({ status: true });
+    } else {
+        res.json({ status: false });
     }
 });
 
