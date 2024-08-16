@@ -33,4 +33,14 @@ export class Backend {
     getGym(dayoffset: number): Promise<GymResponse> {
         return this.processResponse(this.fetch("/api/v1/gym?dayoffset=" + dayoffset));
     }
+
+    isAachener(): Promise<boolean> {
+        return this.processResponse(this.fetch("/api/v1/is_aachen")).then(
+            (data: any) => data.status,
+        );
+    }
+
+    getStudyUrl(url: string): string {
+        return `/api/v1/study?url=${url}`;
+    }
 }

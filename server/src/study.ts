@@ -25,7 +25,7 @@ const OS_TEMP = "/tmp/studydrive/";
 if (!fs.existsSync(OS_TEMP)) {
     fs.mkdirSync(OS_TEMP);
 }
-
+/*
 async function downloadStudyAuthenticated(url: string) {
     //const url = `https://www.studydrive.net/document/${docId}`;
     const response = await fetch(url, {
@@ -86,7 +86,7 @@ async function downloadStudyAuthenticated(url: string) {
     console.log("Downloaded file to", savePath);
 
     return savePath;
-}
+}*/
 
 const cachedFiles: { [url: string]: string } = {};
 // housekeeping
@@ -137,7 +137,7 @@ async function downloadStudyFunky(origUrl: string) {
     let token = preview.split("token=").pop();
     let dlUrl = `https://cdn.studydrive.net/d/prod/documents/${docId}/original/${docId}.${ending}?token=${token}`;
 
-    const savePath = path.join(OS_TEMP, `${name}`);
+    const savePath = path.join(OS_TEMP, `${docId}.${ending}`);
     if (!savePath.startsWith(OS_TEMP)) {
         console.error("Invalid file path", savePath, name);
         throw new Error("Invalid file path");

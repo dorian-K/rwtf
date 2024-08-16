@@ -41,7 +41,7 @@ function ChartImpl({ gym }: { gym: GymResponse }) {
     if (data.length > 0) {
         minX = new Date(data[data.length - 1].created_at).setHours(6, 0, 0, 0);
         maxX = new Date(data[data.length - 1].created_at).setHours(23, 59, 59, 999);
-    } else if (historicData.length > 0) {
+    } else if (historicData.length > 0 && historicData[historicData.length - 1].length > 0) {
         minX = new Date(historicData[historicData.length - 1][0].created_at).setHours(6, 0, 0, 0);
         maxX = new Date(historicData[historicData.length - 1][0].created_at).setHours(
             23,
@@ -63,6 +63,9 @@ function ChartImpl({ gym }: { gym: GymResponse }) {
         let count = 0;
         for (let w = 0; w < historicData.length; w++) {
             let week = historicData[w];
+            if (week.length < 2) {
+                continue;
+            }
             let nextTime = lastVals[w];
             while (nextTime < week.length && week[nextTime].created_at < time) {
                 nextTime++;
@@ -74,15 +77,20 @@ function ChartImpl({ gym }: { gym: GymResponse }) {
                 const x = (time - a.created_at) / (b.created_at - a.created_at);
                 if (x < 0 || x > 1) {
                     console.error("x out of bounds", x);
+                } else {
+                    avg += a.auslastung + x * (b.auslastung - a.auslastung);
+                    count++;
                 }
-                avg += a.auslastung + x * (b.auslastung - a.auslastung);
-                count++;
             } else if (nextTime === 0) {
-                avg += week[nextTime].auslastung;
-                count++;
+                if (Math.abs(week[nextTime].created_at - time) < 1000 * 60 * 15) {
+                    avg += week[nextTime].auslastung;
+                    count++;
+                }
             } else if (nextTime === week.length) {
-                avg += week[nextTime - 1].auslastung;
-                count++;
+                if (Math.abs(week[nextTime - 1].created_at - time) < 1000 * 60 * 15) {
+                    avg += week[nextTime - 1].auslastung;
+                    count++;
+                }
             }
             lastVals[w] = nextTime;
         }
@@ -199,7 +207,7 @@ function ChartImpl({ gym }: { gym: GymResponse }) {
     );
 }
 
-export default function Home() {
+function GymStuff() {
     const [gym, setGym] = useState<GymResponse>();
     const [error, setError] = useState<string>();
     const [isLoading, setIsLoading] = useState(true);
@@ -240,59 +248,111 @@ export default function Home() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [api, dayoffset]);
 
-    useEffect(() => {
-        //import("bootstrap/js/dist/");
-    }, []);
-
     return (
-        <div className="container">
-            <div className="card mt-3">
-                <div className="card-header">
-                    RWTH Gym Auslastung (
-                    <a href="https://buchung.hsz.rwth-aachen.de/angebote/aktueller_zeitraum/_Auslastung.html">
-                        Datenquelle
-                    </a>
-                    ,{" "}
-                    <a href="https://hochschulsport.rwth-aachen.de/cms/HSZ/Sport/Sportanlagen/Sportzentrum-Koenigshuegel/~jpwb/RWTH-GYM/">
-                        Öffnungszeiten
-                    </a>
-                    )
+        <div className="card mt-3">
+            <div className="card-header">
+                RWTH Gym Auslastung (
+                <a href="https://buchung.hsz.rwth-aachen.de/angebote/aktueller_zeitraum/_Auslastung.html">
+                    Datenquelle
+                </a>
+                ,{" "}
+                <a href="https://hochschulsport.rwth-aachen.de/cms/HSZ/Sport/Sportanlagen/Sportzentrum-Koenigshuegel/~jpwb/RWTH-GYM/">
+                    Öffnungszeiten
+                </a>
+                )
+            </div>
+            <div className="card-body">
+                {error && <div className="alert alert-danger">{error}</div>}
+                {gym && <ChartImpl gym={gym} />}
+                <div className="d-flex mt-3 ">
+                    <button
+                        className="btn btn-primary me-2"
+                        onClick={reloadData}
+                        disabled={isLoading}
+                    >
+                        Reload
+                    </button>
+                    <div className="btn-group" role="group">
+                        {days.map((d, index) => (
+                            <button
+                                key={index}
+                                type="button"
+                                className={`btn btn-outline-secondary ${
+                                    dayoffset === index ? "active" : ""
+                                }`}
+                                onClick={() => setDayoffset(index)}
+                            >
+                                {d}
+                            </button>
+                        ))}
+                    </div>
+                    {isLoading && <div className="spinner-border"></div>}
                 </div>
-                <div className="card-body">
-                    {error && <div className="alert alert-danger">{error}</div>}
-                    {gym && <ChartImpl gym={gym} />}
-                    <div className="d-flex mt-3 ">
-                        <button
-                            className="btn btn-primary me-2"
-                            onClick={reloadData}
-                            disabled={isLoading}
-                        >
-                            Reload
-                        </button>
-                        <div className="btn-group" role="group">
-                            {days.map((d, index) => (
-                                <button
-                                    key={index}
-                                    type="button"
-                                    className={`btn btn-outline-secondary ${
-                                        dayoffset === index ? "active" : ""
-                                    }`}
-                                    onClick={() => setDayoffset(index)}
-                                >
-                                    {d}
-                                </button>
-                            ))}
-                        </div>
-                        {isLoading && <div className="spinner-border"></div>}
-                    </div>
-                    <div className="mt-2">
-                        <small>
-                            This Website is{" "}
-                            <a href="https://github.com/dorian-K/rwtf">open-source</a>!
-                        </small>
-                    </div>
+                <div className="mt-2">
+                    <small>
+                        This Website is <a href="https://github.com/dorian-K/rwtf">open-source</a>!
+                    </small>
                 </div>
             </div>
+        </div>
+    );
+}
+
+function StudyStuff() {
+    const api = useBackendContext();
+    const [aachener, setIsAachener] = useState<boolean>();
+
+    useEffect(() => {
+        api.isAachener().then(setIsAachener);
+    }, [api]);
+
+    if (aachener === undefined) {
+        return (
+            <div className="container">
+                <div className="spinner-border"></div>
+            </div>
+        );
+    }
+    if (aachener === false) {
+        return <>Access more from within the RWTH network!</>;
+    }
+
+    const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        const url = (e.currentTarget.querySelector("#studyUrl") as HTMLInputElement).value;
+        window.open(api.getStudyUrl(url), "_blank");
+    };
+
+    return (
+        <div className="card mt-3">
+            <div className="card-header">Study stuff</div>
+            <div className="card-body">
+                <form onSubmit={onSubmit}>
+                    <div className="mb-3">
+                        <label htmlFor="studyUrl" className="form-label">
+                            Studydrive URL
+                        </label>
+                        <input
+                            type="text"
+                            className="form-control"
+                            id="studyUrl"
+                            placeholder="https://www.studydrive.net/document/1234"
+                        />
+                    </div>
+                    <button type="submit" className="btn btn-primary">
+                        Download
+                    </button>
+                </form>
+            </div>
+        </div>
+    );
+}
+
+export default function Home() {
+    return (
+        <div className="container">
+            <GymStuff />
+            <StudyStuff />
         </div>
     );
 }
