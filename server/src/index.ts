@@ -4,8 +4,19 @@ import getAuslastungNumber from "./gym_crawler.js";
 import { PoolConnection } from "mariadb";
 import { SAMPLE } from "./sample_data.js";
 import { downloadStreamFile, isAachener } from "./study.js";
+import { rateLimit } from "express-rate-limit";
+
 const app = express();
 app.set("trust proxy", ["loopback", "linklocal", "uniquelocal"]);
+
+const limiter_burst = rateLimit({
+    windowMs: 5 * 1000, // 20 reqs / 5 seconds
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+app.use(limiter_burst);
+
 const port = 4000;
 
 async function saveAuslastung(auslastung: number) {
@@ -100,7 +111,19 @@ app.get("/api/v1/gym", async (req, res) => {
     }
 });
 
-app.get("/api/v1/study", downloadStreamFile);
+const limiterdoc1 = rateLimit({
+    windowMs: 1 * 60 * 1000, // 10 reqs / 1 minute
+    limit: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+const limiterdoc2 = rateLimit({
+    windowMs: 6 * 60 * 60 * 1000, // 72 docs / 6 hours = doc every 5 minutes
+    limit: 72,
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+app.get("/api/v1/study", limiterdoc1, limiterdoc2, downloadStreamFile);
 app.get("/api/v1/is_aachen", async (req, res) => {
     if (await isAachener(req, res)) {
         res.json({ status: true });

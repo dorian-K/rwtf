@@ -25,68 +25,9 @@ const OS_TEMP = "/tmp/studydrive/";
 if (!fs.existsSync(OS_TEMP)) {
     fs.mkdirSync(OS_TEMP);
 }
-/*
-async function downloadStudyAuthenticated(url: string) {
-    //const url = `https://www.studydrive.net/document/${docId}`;
-    const response = await fetch(url, {
-        headers: FETCH_HEADERS,
-        referrerPolicy: "strict-origin-when-cross-origin",
-        body: null,
-        method: "GET",
-        redirect: "follow",
-    });
-    const rText = await response.text();
 
-    let fileName = /display_file_name":"(.*?)"/.exec(rText)![1];
-    let dlUrl = /file_preview":"(.*?)"/.exec(rText)![1].replace("\\", "");
-
-    if (!fileName || !dlUrl) {
-        throw new Error("Failed to fetch file");
-    }
-
-    if (["/", "\\", ":", "*", "?", '"', "<", ">", "|"].some((c) => fileName.includes(c))) {
-        throw new Error("Invalid file name");
-    }
-
-    fileName += ".pdf";
-
-    const savePath = path.join(OS_TEMP, `${fileName}`);
-    if (!savePath.startsWith(OS_TEMP)) {
-        console.error("Invalid file path", savePath, fileName);
-        throw new Error("Invalid file path");
-    }
-
-    if (fs.existsSync(savePath)) {
-        console.log("File already exists");
-        return savePath;
-    }
-
-    const rawCookies = response.headers.raw()["set-cookie"];
-    const cookies = rawCookies.map((cookie) => cookie.split(";")[0]).join("; ");
-
-    const fileResponse = await fetch(dlUrl, {
-        referrerPolicy: "strict-origin-when-cross-origin",
-        body: null,
-        method: "GET",
-        redirect: "follow",
-        headers: {
-            ...FETCH_HEADERS,
-            cookie: cookies,
-        },
-    });
-
-    // stream save file
-    const dest = fs.createWriteStream(savePath);
-    fileResponse.body?.pipe(dest);
-    // wait for file to be saved
-    console.log("Downloading file...");
-    await new Promise((resolve) => {
-        dest.on("finish", resolve);
-    });
-    console.log("Downloaded file to", savePath);
-
-    return savePath;
-}*/
+const BASE_URL = Buffer.from("aHR0cHM6Ly93d3cuc3R1ZHlkcml2ZS5uZXQ=", "base64").toString("utf-8");
+const BASE = Buffer.from("c3R1ZHlkcml2ZQ==", "base64").toString("utf-8");
 
 const cachedFiles: { [url: string]: string } = {};
 // housekeeping
@@ -107,14 +48,14 @@ async function downloadStudyFunky(origUrl: string) {
     }
 
     // extract id
-    if (!origUrl.startsWith("https://www.studydrive.net")) {
+    if (!origUrl.startsWith(BASE_URL)) {
         throw new Error("Invalid url");
     }
     const docId = origUrl.split("/").pop()!.split("?")[0];
     if (!docId) {
         throw new Error("Invalid url");
     }
-    const url = `https://www.studydrive.net/document/${docId}`;
+    const url = `${BASE_URL}/document/${docId}`;
     const response = await fetch(url, {
         headers: {
             ...FETCH_HEADERS,
@@ -135,7 +76,7 @@ async function downloadStudyFunky(origUrl: string) {
     let ending = name.split(".").pop();
     let preview = data["file_preview"];
     let token = preview.split("token=").pop();
-    let dlUrl = `https://cdn.studydrive.net/d/prod/documents/${docId}/original/${docId}.${ending}?token=${token}`;
+    let dlUrl = `https://cdn.${BASE}.net/d/prod/documents/${docId}/original/${docId}.${ending}?token=${token}`;
 
     const savePath = path.join(OS_TEMP, `${docId}.${ending}`);
     if (!savePath.startsWith(OS_TEMP)) {
@@ -230,7 +171,6 @@ export async function isAachener(req: Request, res: Response) {
     return true;
 }
 
-// GET /api/v1/study?url=https://www.studydrive.net/document/1234
 export async function downloadStreamFile(req: Request, res: Response) {
     if (!isAachener(req, res)) {
         res.status(403).send({ error: true, msg: "Invalid IP" });
