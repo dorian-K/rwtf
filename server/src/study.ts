@@ -187,7 +187,12 @@ export async function isAachener(req: Request, res: Response) {
                 return false;
             }
             // add to valid list
-            valid_ip_ranges.push(ip + "/16");
+            if (js.version === "IPv6") {
+                valid_ip_ranges.push(ip + "/64");
+            } else {
+                valid_ip_ranges.push(ip + "/16");
+            }
+
             if (valid_ip_ranges.length > 1000) {
                 valid_ip_ranges.shift();
             }
