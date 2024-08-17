@@ -148,6 +148,22 @@ const database_init = async () => {
         // other optimizations
         await conn.query("OPTIMIZE TABLE rwth_gym");
         await conn.query("ANALYZE TABLE rwth_gym");
+
+        await conn.query(
+            `CREATE TABLE IF NOT EXISTS studyfiles (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                study_id VARCHAR(255) NOT NULL UNIQUE,
+                path VARCHAR(511) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                filename VARCHAR(511) NOT NULL,
+                course_name VARCHAR(511) NOT NULL,
+                file_type INT NOT NULL,
+                university_name VARCHAR(255) NOT NULL,
+                professor_name VARCHAR(255) NOT NULL,
+                semester_label VARCHAR(255) NOT NULL,
+                json_data TEXT NOT NULL
+            )`
+        );
         console.log("Database initialized");
 
         if (conn) conn.end();

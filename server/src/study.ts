@@ -1,8 +1,11 @@
 import fetch from "node-fetch";
 import fs from "fs";
+import fsPromises from "fs/promises";
 import path from "path";
 import { Request, Response } from "express";
 import ipRangeCheck from "ip-range-check";
+import { getConnection } from "./db.js";
+import { PoolConnection } from "mariadb";
 
 const FETCH_HEADERS = {
     accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng;q=0.8,application/signed-exchange;v=b3;q=0.7",
@@ -20,7 +23,7 @@ const FETCH_HEADERS = {
     "upgrade-insecure-requests": "1",
 };
 
-const OS_TEMP = "/tmp/studydrive/";
+const OS_TEMP = "/tmp/study_files/";
 
 if (!fs.existsSync(OS_TEMP)) {
     fs.mkdirSync(OS_TEMP);
@@ -110,6 +113,35 @@ async function downloadStudyFunky(origUrl: string) {
     // cache
     cachedFiles[origUrl] = savePath;
 
+    // add to database
+    let conn: PoolConnection;
+
+    getConnection()
+        .then((c) => {
+            conn = c;
+            return conn.query(
+                "INSERT INTO studyfiles (path, study_id, filename, course_name, file_type, university_name, professor_name, semester_label, json_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                [
+                    `${docId}.${ending}`,
+                    docId,
+                    name,
+                    data["course_name"] ?? "",
+                    data["file_type"] ?? -1,
+                    data["university_name"] ?? "",
+                    data["professor_name"] ?? "",
+                    data["semester"]["name"] ?? "",
+                    JSON.stringify(data),
+                ]
+            );
+        })
+        .then(() => {
+            conn.end();
+        })
+        .catch((err) => {
+            console.error(err);
+            if (conn) conn.end();
+        });
+
     return savePath;
 }
 
@@ -191,3 +223,35 @@ export async function downloadStreamFile(req: Request, res: Response) {
         res.status(500).send({ error: true, msg: "Failed to download file" });
     }
 }
+
+// housekeeping of files directory
+setInterval(() => {
+    console.log("Housekeeping");
+    let files = fs.readdirSync(OS_TEMP);
+    // total size should not exceed 50gb
+    let filesStat = files.map((f) => fsPromises.stat(path.join(OS_TEMP, f)));
+    Promise.all(filesStat)
+        .then((stats) => {
+            let totalSize = stats.reduce((acc, val) => acc + val.size, 0);
+            if (totalSize > 50 * 1024 * 1024 * 1024 || files.length > 10000) {
+                // 50gb
+                // delete oldest files until size is below 40gb
+                let sorted = stats
+                    .map((s, i) => ({ atime: s.atimeMs, size: s.size, file: files[i] }))
+                    .sort((a, b) => a.atime - b.atime);
+                let i = 0;
+                while (totalSize > 40 * 1024 * 1024 * 1024 || files.length - i > 10000) {
+                    // 40gb
+                    fs.unlinkSync(path.join(OS_TEMP, sorted[i].file));
+                    // remove from cache
+                    delete cachedFiles[sorted[i].file];
+                    totalSize -= sorted[i].size;
+                    i++;
+                }
+            }
+            console.log("Housekeeping done");
+        })
+        .catch((err) => {
+            console.error(err);
+        });
+}, 1000 * 60 * 60); // every hour

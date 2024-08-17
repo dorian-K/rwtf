@@ -17,6 +17,8 @@ services:
       - mariadb
     environment:
       - TZ=Europe/Berlin
+    volumes:
+      - ./study_files:/tmp/study_files
 
   mariadb:
     image: mariadb
