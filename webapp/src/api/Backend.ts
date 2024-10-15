@@ -8,6 +8,10 @@ export interface GymResponse {
     data_historic: GymDataPiece[][];
 }
 
+export interface GymInterpLineResponse {
+    interpLine: GymDataPiece[];
+}
+
 export class Backend {
     fetch(input: string, init?: RequestInit): Promise<Response> {
         return fetch(input, init);
@@ -32,6 +36,10 @@ export class Backend {
 
     getGym(dayoffset: number): Promise<GymResponse> {
         return this.processResponse(this.fetch("/api/v1/gym?dayoffset=" + dayoffset));
+    }
+
+    getGymInterpLine(dayoffset: number): Promise<GymInterpLineResponse> {
+        return this.processResponse(this.fetch("/api/v1/gym_interpline?dayoffset=" + dayoffset));
     }
 
     isAachener(): Promise<boolean> {

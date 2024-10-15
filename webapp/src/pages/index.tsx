@@ -1,4 +1,4 @@
-import { Backend, GymResponse } from "@/api/Backend";
+import { Backend, GymInterpLineResponse, GymResponse } from "@/api/Backend";
 import { useBackendContext } from "@/components/BackendProvider";
 import { ApexOptions } from "apexcharts";
 import React from "react";
@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 
 const ReactApexChart = React.lazy(() => import("react-apexcharts"));
 
-function ChartImpl({ gym }: { gym: GymResponse }) {
+function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineResponse }) {
     const chartRef = React.createRef<any>();
 
     // hide historic data by default
@@ -36,7 +36,6 @@ function ChartImpl({ gym }: { gym: GymResponse }) {
     );
 
     let minX, maxX;
-    let historicAvg = [];
 
     if (data.length > 0) {
         minX = new Date(data[data.length - 1].created_at).setHours(6, 0, 0, 0);
@@ -51,53 +50,6 @@ function ChartImpl({ gym }: { gym: GymResponse }) {
         );
     } else {
         return <div>No data</div>;
-    }
-
-    // funny code to calculate historic average
-    // this is complicated because the data is not aligned to a grid in the time dimension
-    let hrs = Math.round((maxX - minX) / (1000 * 60 * 60));
-    let lastVals = new Array(historicData.length).fill(0);
-    for (let min = 0; min < hrs * 60; min += 5) {
-        let time = +new Date(minX + min * 60 * 1000);
-        let avg = 0;
-        let count = 0;
-        for (let w = 0; w < historicData.length; w++) {
-            let week = historicData[w];
-            if (week.length < 2) {
-                continue;
-            }
-            let nextTime = lastVals[w];
-            while (nextTime < week.length && week[nextTime].created_at < time) {
-                nextTime++;
-            }
-            // linear interpolation
-            if (nextTime > 0 && nextTime < week.length) {
-                const a = week[nextTime - 1];
-                const b = week[nextTime];
-                const x = (time - a.created_at) / (b.created_at - a.created_at);
-                if (x < 0 || x > 1) {
-                    console.error("x out of bounds", x);
-                } else {
-                    avg += a.auslastung + x * (b.auslastung - a.auslastung);
-                    count++;
-                }
-            } else if (nextTime === 0) {
-                if (Math.abs(week[nextTime].created_at - time) < 1000 * 60 * 15) {
-                    avg += week[nextTime].auslastung;
-                    count++;
-                }
-            } else if (nextTime === week.length) {
-                if (Math.abs(week[nextTime - 1].created_at - time) < 1000 * 60 * 15) {
-                    avg += week[nextTime - 1].auslastung;
-                    count++;
-                }
-            }
-            lastVals[w] = nextTime;
-        }
-        if (count > 0) {
-            avg /= count;
-        }
-        historicAvg.push({ created_at: time, auslastung: avg });
     }
 
     const options: ApexOptions = {
@@ -179,10 +131,18 @@ function ChartImpl({ gym }: { gym: GymResponse }) {
         },
         {
             name: "Historic Avg",
-            data: historicAvg.map((g) => ({
-                x: g.created_at,
-                y: g.auslastung,
-            })),
+            data: gymLine.interpLine.map((g) => {
+                const gDate = new Date(g.created_at);
+                return {
+                    x: +new Date(minX).setHours(
+                        gDate.getHours(),
+                        gDate.getMinutes(),
+                        gDate.getSeconds(),
+                        gDate.getMilliseconds(),
+                    ),
+                    y: g.auslastung,
+                };
+            }),
         },
     ];
     series = series.concat(
@@ -209,6 +169,7 @@ function ChartImpl({ gym }: { gym: GymResponse }) {
 
 function GymStuff() {
     const [gym, setGym] = useState<GymResponse>();
+    const [gymLine, setGymLine] = useState<GymInterpLineResponse>();
     const [error, setError] = useState<string>();
     const [isLoading, setIsLoading] = useState(true);
     const [dayoffset, setDayoffset] = useState(0);
@@ -218,13 +179,15 @@ function GymStuff() {
 
     const reloadData = () => {
         setIsLoading(true);
-        api.getGym(dayoffset)
-            .then((res) => {
-                setGym(res);
-                setError(undefined);
-            })
+        const prom = Promise.all([api.getGym(dayoffset), api.getGymInterpLine(dayoffset)]);
+        prom.then((res) => {
+            setGym(res[0]);
+            setGymLine(res[1]);
+            setError(undefined);
+        })
             .catch((err) => {
                 setGym(undefined);
+                setGymLine(undefined);
                 setError(err + "");
             })
             .then(() => {
@@ -263,7 +226,7 @@ function GymStuff() {
             </div>
             <div className="card-body">
                 {error && <div className="alert alert-danger">{error}</div>}
-                {gym && <ChartImpl gym={gym} />}
+                {gym && gymLine && <ChartImpl gym={gym} gymLine={gymLine} />}
                 <div className="d-flex mt-3 ">
                     <button
                         className="btn btn-primary me-2"
