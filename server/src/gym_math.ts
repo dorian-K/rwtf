@@ -4,19 +4,23 @@ export interface GymDataPiece {
 }
 
 export default function makeInterpLine(gym_hist: GymDataPiece[][]) {
-    let historicData = gym_hist.map((week, index) =>
+    let minX = new Date().setHours(6, 0, 0, 0);
+    let maxX = new Date().setHours(23, 59, 59, 999);
+    let historicAvg = [];
+    let historicData = gym_hist.map((week) =>
         week
-            .map((g) => ({
-                ...g,
-                created_at: Date.parse(g.created_at) + 1000 * 60 * 60 * 24 * 7 * (index + 1),
-            }))
+            .map((g) => {
+                const gDate = new Date(g.created_at);
+                return {
+                    ...g,
+                    created_at: new Date(minX).setHours(gDate.getHours(), gDate.getMinutes(), gDate.getSeconds(), gDate.getMilliseconds()),
+                }
+            })
             .sort((a, b) => a.created_at - b.created_at),
     );
-	let minX = new Date().setHours(6, 0, 0, 0);
-	let maxX = new Date().setHours(23, 59, 59, 999);
-	let historicAvg = [];
 
-	// funny code to calculate historic average
+
+    // funny code to calculate historic average
     // this is complicated because the data is not aligned to a grid in the time dimension
     let hrs = Math.round((maxX - minX) / (1000 * 60 * 60));
     let lastVals = new Array(historicData.length).fill(0);
@@ -62,5 +66,5 @@ export default function makeInterpLine(gym_hist: GymDataPiece[][]) {
         }
         historicAvg.push({ created_at: time, auslastung: avg });
     }
-	return historicAvg;
+    return historicAvg;
 }
