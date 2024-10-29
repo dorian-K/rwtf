@@ -10,6 +10,7 @@ export interface GymResponse {
 
 export interface GymInterpLineResponse {
     interpLine: GymDataPiece[];
+    allTimeHigh: number;
 }
 
 export class Backend {

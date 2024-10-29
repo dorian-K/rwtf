@@ -19,6 +19,29 @@ function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineR
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [chartRef]);
 
+    let todayReference;
+    if (gym.data_today.length > 0) {
+        todayReference = new Date(gym.data_today[0].created_at);
+    } else if (
+        gym.data_historic.length > 0 &&
+        gym.data_historic[gym.data_historic.length - 1].length > 0
+    ) {
+        todayReference = new Date(gym.data_historic[gym.data_historic.length - 1][0].created_at);
+    } else {
+        return <div>No data</div>;
+    }
+
+    let adjustDate = (d: Date | string) => {
+        if (typeof d === "string") {
+            d = new Date(d);
+        }
+        d.setFullYear(
+            todayReference.getFullYear(),
+            todayReference.getMonth(),
+            todayReference.getDate(),
+        );
+        return +d;
+    };
     let data = gym.data_today.map((g) => ({
         ...g,
         created_at: Date.parse(g.created_at),
@@ -30,27 +53,13 @@ function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineR
         week
             .map((g) => ({
                 ...g,
-                created_at: Date.parse(g.created_at) + 1000 * 60 * 60 * 24 * 7 * (index + 1),
+                created_at: adjustDate(g.created_at),
             }))
             .sort((a, b) => a.created_at - b.created_at),
     );
 
-    let minX, maxX;
-
-    if (data.length > 0) {
-        minX = new Date(data[data.length - 1].created_at).setHours(6, 0, 0, 0);
-        maxX = new Date(data[data.length - 1].created_at).setHours(23, 59, 59, 999);
-    } else if (historicData.length > 0 && historicData[historicData.length - 1].length > 0) {
-        minX = new Date(historicData[historicData.length - 1][0].created_at).setHours(6, 0, 0, 0);
-        maxX = new Date(historicData[historicData.length - 1][0].created_at).setHours(
-            23,
-            59,
-            59,
-            999,
-        );
-    } else {
-        return <div>No data</div>;
-    }
+    let minX = new Date(todayReference).setHours(6, 0, 0, 0);
+    let maxX = new Date(todayReference).setHours(23, 59, 59, 999);
 
     const options: ApexOptions = {
         yaxis: {
@@ -134,12 +143,7 @@ function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineR
             data: gymLine.interpLine.map((g) => {
                 const gDate = new Date(g.created_at);
                 return {
-                    x: +new Date(minX).setHours(
-                        gDate.getHours(),
-                        gDate.getMinutes(),
-                        gDate.getSeconds(),
-                        gDate.getMilliseconds(),
-                    ),
+                    x: adjustDate(gDate),
                     y: g.auslastung,
                 };
             }),
@@ -175,7 +179,7 @@ function GymStuff() {
     const [dayoffset, setDayoffset] = useState(0);
     const api = useBackendContext();
 
-    const days = ["Today", "+1 day", "+2 days", "+3 days"];
+    const days = ["Today", "Tomorrow", "+2 days", "+3 days"];
 
     const reloadData = () => {
         setIsLoading(true);
