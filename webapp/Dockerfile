@@ -1,5 +1,5 @@
 # Use the official Node.js 14 image as the base image
-FROM node:lts-alpine
+FROM node:20
 
 # Set the working directory inside the container
 WORKDIR /app
