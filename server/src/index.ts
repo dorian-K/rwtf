@@ -125,10 +125,10 @@ app.get("/api/v1/gym_interpline", async (req, res) => {
         conn = await getConnection();
         let startTime = new Date();
         let response: any;
-        
+
         let weeks = [];
-        const NUM_WEEKS = 3;
-        for (let i = 0; i <= NUM_WEEKS; i++) {
+        const NUM_WEEKS = 12;
+        for (let i = 1; i <= NUM_WEEKS; i++) {
             const startDate = new Date();
             startDate.setDate(startDate.getDate() - i * 7 + dayoffset);
             startDate.setHours(6, 0, 0, 0);
@@ -152,6 +152,16 @@ app.get("/api/v1/gym_interpline", async (req, res) => {
         }
         const interpLine = makeInterpLine(weeks);
 
+        // calculate all time high
+        let allTimeHigh = await conn.query(
+            "SELECT MAX(auslastung) as max_auslastung FROM rwth_gym"
+        );
+        if (allTimeHigh.length > 0) {
+            allTimeHigh = allTimeHigh[0].max_auslastung;
+        } else {
+            allTimeHigh = 0;
+        }
+
         let endTime = new Date();
         let queryMs = endTime.getTime() - startTime.getTime();
 
@@ -161,6 +171,7 @@ app.get("/api/v1/gym_interpline", async (req, res) => {
         res.json({
             interpLine: interpLine,
             queryMs: queryMs,
+            allTimeHigh: allTimeHigh,
         });
     } catch (err) {
         console.error(err);
