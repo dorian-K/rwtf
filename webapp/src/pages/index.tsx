@@ -7,19 +7,6 @@ import { useEffect, useState } from "react";
 const ReactApexChart = React.lazy(() => import("react-apexcharts"));
 
 function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineResponse }) {
-    const chartRef = React.createRef<any>();
-
-    // hide historic data by default
-    useEffect(() => {
-        if (chartRef.current) {
-            for (let i = 0; i < gym.data_historic.length; i++) {
-                chartRef.current.chart.hideSeries(`${i + 1} Week/s ago`);
-            }
-            chartRef.current.chart.hideSeries(`Historic Arrival`);
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [chartRef]);
-
     let todayReference;
     if (gym.data_today.length > 0) {
         todayReference = new Date(gym.data_today[0].created_at);
@@ -185,6 +172,7 @@ function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineR
                 x: g.created_at,
                 y: g.arrival * (60 / 5), // correction factor
             })),
+            hidden: true,
         },
     ];
     series = series.concat(
@@ -194,18 +182,12 @@ function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineR
                 x: g.created_at,
                 y: g.auslastung,
             })),
+            hidden: true,
         })),
     );
 
     return (
-        <ReactApexChart
-            type="area"
-            width={"100%"}
-            height={500}
-            options={options}
-            series={series}
-            ref={chartRef}
-        />
+        <ReactApexChart type="area" width={"100%"} height={500} options={options} series={series} />
     );
 }
 
