@@ -1,4 +1,4 @@
-import { Backend, GymInterpLineResponse, GymResponse } from "@/api/Backend";
+import { Backend, GymDataPiece, GymInterpLineResponse, GymResponse } from "@/api/Backend";
 import { useBackendContext } from "@/components/BackendProvider";
 import { ApexOptions } from "apexcharts";
 import React from "react";
@@ -15,6 +15,7 @@ function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineR
             for (let i = 0; i < gym.data_historic.length; i++) {
                 chartRef.current.chart.hideSeries(`${i + 1} Week/s ago`);
             }
+            chartRef.current.chart.hideSeries(`Historic Arrival`);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [chartRef]);
@@ -88,8 +89,8 @@ function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineR
         },
         stroke: {
             curve: "smooth",
-            width: [3, 2].concat(new Array(historicData.length).fill(1)),
-            dashArray: [0, 1].concat(new Array(historicData.length).fill(3)),
+            width: [3, 2, 2].concat(new Array(historicData.length).fill(1)),
+            dashArray: [0, 1, 1].concat(new Array(historicData.length).fill(3)),
         },
         title: {
             text: "RWTH Gym Auslastung",
@@ -113,7 +114,7 @@ function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineR
         },
         fill: {
             type: "solid",
-            opacity: [0.4, 0.15].concat(new Array(historicData.length).fill(0.02)),
+            opacity: [0.4, 0.15, 0.15].concat(new Array(historicData.length).fill(0.02)),
         },
         annotations: {
             texts: [
@@ -128,6 +129,36 @@ function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineR
             ],
         },
     };
+
+    let historicArrivals = [];
+    for (let i = 0; i < gymLine.interpLine.length; i++) {
+        const g = gymLine.interpLine[i];
+        let val = g.auslastung;
+        let j = i - 1;
+        let minTime = adjustDate(new Date(g.created_at)) - 1000 * 60 * 60 * 1.5; // 1.5 hrs
+        while (j >= 0 && historicArrivals[j].created_at > minTime + 1000) {
+            val -= Math.max(historicArrivals[j].arrival, 0);
+            j--;
+        }
+        historicArrivals.push({
+            created_at: adjustDate(new Date(g.created_at)),
+            arrival: val,
+        });
+    }
+    // smooth out the arrival data
+    let smoothedArrivals = [];
+    //smoothedArrivals.push(historicArrivals[0]);
+    for (let i = 1; i < historicArrivals.length - 2; i++) {
+        smoothedArrivals.push({
+            created_at: historicArrivals[i].created_at,
+            arrival:
+                (historicArrivals[i - 1].arrival +
+                    2 * historicArrivals[i].arrival +
+                    historicArrivals[i + 1].arrival) /
+                4,
+        });
+    }
+    //smoothedArrivals.push(historicArrivals[historicArrivals.length - 1]);
 
     let series: ApexAxisChartSeries = [
         {
@@ -147,6 +178,13 @@ function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineR
                     y: g.auslastung,
                 };
             }),
+        },
+        {
+            name: "Historic Arrival",
+            data: smoothedArrivals.map((g) => ({
+                x: g.created_at,
+                y: g.arrival * (60 / 5), // correction factor
+            })),
         },
     ];
     series = series.concat(
@@ -256,6 +294,37 @@ function GymStuff() {
                     {isLoading && <div className="spinner-border"></div>}
                 </div>
                 <div className="mt-2">
+                    <small>
+                        <dl>
+                            <dt>
+                                <strong>Auslastung</strong>:
+                            </dt>
+                            <dd>Number of people in the gym as reported by HSZ.</dd>
+                            <dt>
+                                <strong>Historic Avg</strong>:
+                            </dt>
+                            <dd>
+                                Average auslastung on this day of the week over the last couple of
+                                weeks/months.
+                            </dd>
+                            <dt>
+                                <strong>Historic Arrival</strong>:
+                            </dt>
+                            <dd>
+                                Flow rate of people arriving at the gym (Unit: people per hour).
+                                <br />
+                                For example, you will see that there are spikes around whole hours,
+                                this is because most people plan to meet up at the gym at "nice"
+                                times.
+                                <br />
+                                This also usually coincides with the end of lectures.
+                            </dd>
+                            <dt>
+                                <strong>x Week/s ago</strong>:
+                            </dt>
+                            <dd>Data from x week/s ago.</dd>
+                        </dl>
+                    </small>
                     <small>
                         This Website is <a href="https://github.com/dorian-K/rwtf">open-source</a>!
                     </small>

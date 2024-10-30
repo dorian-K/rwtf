@@ -127,7 +127,7 @@ app.get("/api/v1/gym_interpline", async (req, res) => {
         let response: any;
 
         let weeks = [];
-        const NUM_WEEKS = 12;
+        const NUM_WEEKS = 4 * 3; // 3 months
         for (let i = 1; i <= NUM_WEEKS; i++) {
             const startDate = new Date();
             startDate.setDate(startDate.getDate() - i * 7 + dayoffset);
