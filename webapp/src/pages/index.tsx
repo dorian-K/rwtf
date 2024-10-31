@@ -269,11 +269,16 @@ export function GymPlotWithHandles() {
 
 function GymStuff() {
     const inputRef = React.createRef<HTMLInputElement>();
+    const [embedCode, setEmbedCode] = useState<string>(EMBED_CODE("https://rwtf.dorianko.ch"));
+
+    useEffect(() => {
+        setEmbedCode(EMBED_CODE(window.location.origin));
+    }, []);
 
     const copyEmbed = () => {
         inputRef.current?.select();
         try {
-            navigator.clipboard.writeText(EMBED_CODE);
+            navigator.clipboard.writeText(embedCode);
         } catch (err) {
             console.error("Failed to copy to clipboard", err);
             document.execCommand("copy");
@@ -340,7 +345,7 @@ function GymStuff() {
                             <input
                                 type="text"
                                 className="form-control"
-                                value={EMBED_CODE(window.location.origin)}
+                                value={embedCode}
                                 onClick={copyEmbed}
                                 ref={inputRef}
                             />
