@@ -1,8 +1,9 @@
-import { Backend, GymDataPiece, GymInterpLineResponse, GymResponse } from "@/api/Backend";
+import { GymInterpLineResponse, GymResponse } from "@/api/Backend";
 import { useBackendContext } from "@/components/BackendProvider";
 import { ApexOptions } from "apexcharts";
 import React from "react";
 import { useEffect, useState } from "react";
+import { EMBED_CODE } from "./embed_gym";
 
 const ReactApexChart = React.lazy(() => import("react-apexcharts"));
 
@@ -191,15 +192,15 @@ function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineR
     );
 }
 
-function GymStuff() {
+export function GymPlotWithHandles() {
     const [gym, setGym] = useState<GymResponse>();
     const [gymLine, setGymLine] = useState<GymInterpLineResponse>();
     const [error, setError] = useState<string>();
     const [isLoading, setIsLoading] = useState(true);
-    const [dayoffset, setDayoffset] = useState(0);
-    const api = useBackendContext();
 
     const days = ["Today", "Tomorrow", "+2 days", "+3 days"];
+    const [dayoffset, setDayoffset] = useState(0);
+    const api = useBackendContext();
 
     const reloadData = () => {
         setIsLoading(true);
@@ -236,6 +237,50 @@ function GymStuff() {
     }, [api, dayoffset]);
 
     return (
+        <>
+            {error && <div className="alert alert-danger">{error}</div>}
+            <div style={{ height: "500px" }}>
+                {gym && gymLine && <ChartImpl gym={gym} gymLine={gymLine} />}
+            </div>
+
+            <div className="d-flex mt-3 ">
+                <button className="btn btn-primary me-2" onClick={reloadData} disabled={isLoading}>
+                    Reload
+                </button>
+                <div className="btn-group" role="group">
+                    {days.map((d, index) => (
+                        <button
+                            key={index}
+                            type="button"
+                            className={`btn btn-outline-secondary ${
+                                dayoffset === index ? "active" : ""
+                            }`}
+                            onClick={() => setDayoffset(index)}
+                        >
+                            {d}
+                        </button>
+                    ))}
+                </div>
+                {isLoading && <div className="spinner-border"></div>}
+            </div>
+        </>
+    );
+}
+
+function GymStuff() {
+    const inputRef = React.createRef<HTMLInputElement>();
+
+    const copyEmbed = () => {
+        inputRef.current?.select();
+        try {
+            navigator.clipboard.writeText(EMBED_CODE);
+        } catch (err) {
+            console.error("Failed to copy to clipboard", err);
+            document.execCommand("copy");
+        }
+    };
+
+    return (
         <div className="card mt-3">
             <div className="card-header">
                 RWTH Gym Auslastung (
@@ -249,33 +294,10 @@ function GymStuff() {
                 )
             </div>
             <div className="card-body">
-                {error && <div className="alert alert-danger">{error}</div>}
-                {gym && gymLine && <ChartImpl gym={gym} gymLine={gymLine} />}
-                <div className="d-flex mt-3 ">
-                    <button
-                        className="btn btn-primary me-2"
-                        onClick={reloadData}
-                        disabled={isLoading}
-                    >
-                        Reload
-                    </button>
-                    <div className="btn-group" role="group">
-                        {days.map((d, index) => (
-                            <button
-                                key={index}
-                                type="button"
-                                className={`btn btn-outline-secondary ${
-                                    dayoffset === index ? "active" : ""
-                                }`}
-                                onClick={() => setDayoffset(index)}
-                            >
-                                {d}
-                            </button>
-                        ))}
-                    </div>
-                    {isLoading && <div className="spinner-border"></div>}
-                </div>
+                <GymPlotWithHandles />
                 <div className="mt-2">
+                    <hr />
+                    <h4>Legend</h4>
                     <small>
                         <dl>
                             <dt>
@@ -309,6 +331,27 @@ function GymStuff() {
                     </small>
                     <small>
                         This Website is <a href="https://github.com/dorian-K/rwtf">open-source</a>!
+                    </small>
+                    <hr />
+                    <h4>Embed</h4>
+                    <small>
+                        Embed this chart in your moodle dashboard with the following code:
+                        <div className="input-group my-2">
+                            <input
+                                type="text"
+                                className="form-control"
+                                value={EMBED_CODE(window.location.origin)}
+                                onClick={copyEmbed}
+                                ref={inputRef}
+                            />
+                            <button
+                                className="btn btn-outline-secondary"
+                                type="button"
+                                onClick={copyEmbed}
+                            >
+                                Copy
+                            </button>
+                        </div>
                     </small>
                 </div>
             </div>
