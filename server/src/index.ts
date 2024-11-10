@@ -127,7 +127,7 @@ app.get("/api/v1/gym_interpline", async (req, res) => {
         let response: any;
 
         let weeks: GymDataWeek[] = [];
-        const NUM_WEEKS = 4 * 2; // 3 months
+        const NUM_WEEKS = 4 * 3; // 3 months
         for (let i = 1; i <= NUM_WEEKS; i++) {
             const startDate = new Date();
             startDate.setDate(startDate.getDate() - i * 7 + dayoffset);
@@ -150,7 +150,7 @@ app.get("/api/v1/gym_interpline", async (req, res) => {
             });
             weeks.push({
                 data: sanitized,
-                weight: i <= 4 ? 3 : 1,
+                weight: i <= 4 ? 5 : 1,
             });
         }
         const interpLine = makeInterpLine(weeks);
