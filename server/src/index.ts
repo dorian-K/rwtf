@@ -5,7 +5,7 @@ import { PoolConnection } from "mariadb";
 import { SAMPLE } from "./sample_data.js";
 import { downloadStreamFile, isAachener } from "./study.js";
 import { rateLimit } from "express-rate-limit";
-import makeInterpLine from "./gym_math.js";
+import makeInterpLine, { GymDataWeek } from "./gym_math.js";
 
 const app = express();
 app.set("trust proxy", ["loopback", "linklocal", "uniquelocal"]);
@@ -126,7 +126,7 @@ app.get("/api/v1/gym_interpline", async (req, res) => {
         let startTime = new Date();
         let response: any;
 
-        let weeks = [];
+        let weeks: GymDataWeek[] = [];
         const NUM_WEEKS = 4 * 3; // 3 months
         for (let i = 1; i <= NUM_WEEKS; i++) {
             const startDate = new Date();
@@ -148,7 +148,10 @@ app.get("/api/v1/gym_interpline", async (req, res) => {
                     created_at: row.created_at,
                 };
             });
-            weeks.push(sanitized);
+            weeks.push({
+                data: sanitized,
+                weight: i <= 4 ? 3 : 1,
+            });
         }
         const interpLine = makeInterpLine(weeks);
 
