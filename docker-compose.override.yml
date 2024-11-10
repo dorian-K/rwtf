@@ -4,6 +4,9 @@ services:
       - webapp
     networks:
       - rwtf_network
+  screenshot:
+    networks:
+      - rwtf_network
   webapp:
     build: webapp
     volumes:
