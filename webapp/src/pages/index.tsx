@@ -188,11 +188,18 @@ function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineR
     );
 
     return (
-        <ReactApexChart type="area" width={"100%"} height={500} options={options} series={series} />
+        <ReactApexChart
+            id="gymchart"
+            type="area"
+            width={"100%"}
+            height={500}
+            options={options}
+            series={series}
+        />
     );
 }
 
-export function GymPlotWithHandles() {
+export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: boolean }) {
     const [gym, setGym] = useState<GymResponse>();
     const [gymLine, setGymLine] = useState<GymInterpLineResponse>();
     const [error, setError] = useState<string>();
@@ -243,26 +250,32 @@ export function GymPlotWithHandles() {
                 {gym && gymLine && <ChartImpl gym={gym} gymLine={gymLine} />}
             </div>
 
-            <div className="d-flex mt-3 ">
-                <button className="btn btn-primary me-2" onClick={reloadData} disabled={isLoading}>
-                    Reload
-                </button>
-                <div className="btn-group" role="group">
-                    {days.map((d, index) => (
-                        <button
-                            key={index}
-                            type="button"
-                            className={`btn btn-outline-secondary ${
-                                dayoffset === index ? "active" : ""
-                            }`}
-                            onClick={() => setDayoffset(index)}
-                        >
-                            {d}
-                        </button>
-                    ))}
+            {hideHandles === false && (
+                <div className="d-flex mt-3 ">
+                    <button
+                        className="btn btn-primary me-2"
+                        onClick={reloadData}
+                        disabled={isLoading}
+                    >
+                        Reload
+                    </button>
+                    <div className="btn-group" role="group">
+                        {days.map((d, index) => (
+                            <button
+                                key={index}
+                                type="button"
+                                className={`btn btn-outline-secondary ${
+                                    dayoffset === index ? "active" : ""
+                                }`}
+                                onClick={() => setDayoffset(index)}
+                            >
+                                {d}
+                            </button>
+                        ))}
+                    </div>
+                    {isLoading && <div className="spinner-border"></div>}
                 </div>
-                {isLoading && <div className="spinner-border"></div>}
-            </div>
+            )}
         </>
     );
 }

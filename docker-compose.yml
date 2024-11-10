@@ -6,6 +6,7 @@ services:
     volumes:
       - webapp-content:/usr/share/nginx/html
       - ./nginx.conf:/etc/nginx/conf.d/default.conf
+      - screenshot-data:/screenshot
     depends_on:
       - server
 
@@ -31,6 +32,17 @@ services:
       - TZ=Europe/Berlin
     volumes:
       - ./mariadb-data:/var/lib/mysql
+  screenshot:
+    build: screenshot
+    init: true
+    restart: unless-stopped
+    depends_on:
+      - rwtf_nginx
+    environment:
+      - TZ=Europe/Berlin
+    volumes:
+      - screenshot-data:/data
 
 volumes:
   webapp-content:
+  screenshot-data:

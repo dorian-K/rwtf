@@ -1,9 +1,13 @@
+import { useSearchParams } from "next/navigation";
 import { GymPlotWithHandles } from ".";
 
 export default function EmbedGym() {
+    const searchParams = useSearchParams();
+    const hideHandles = searchParams.get("hidecontrols") !== null;
+
     return (
         <div className="p-2">
-            <GymPlotWithHandles />
+            <GymPlotWithHandles hideHandles={hideHandles} />
         </div>
     );
 }
