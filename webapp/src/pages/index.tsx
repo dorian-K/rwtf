@@ -280,23 +280,37 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
     );
 }
 
-function GymStuff() {
+function CopyStation({ str }: { str: string }) {
     const inputRef = React.createRef<HTMLInputElement>();
-    const [embedCode, setEmbedCode] = useState<string>(EMBED_CODE("https://rwtf.dorianko.ch"));
 
-    useEffect(() => {
-        setEmbedCode(EMBED_CODE(window.location.origin));
-    }, []);
-
-    const copyEmbed = () => {
+    const copy = () => {
         inputRef.current?.select();
         try {
-            navigator.clipboard.writeText(embedCode);
+            navigator.clipboard.writeText(str);
         } catch (err) {
             console.error("Failed to copy to clipboard", err);
             document.execCommand("copy");
         }
     };
+
+    return (
+        <div className="input-group my-2">
+            <input type="text" className="form-control" value={str} onClick={copy} ref={inputRef} />
+            <button className="btn btn-outline-secondary" type="button" onClick={copy}>
+                Copy
+            </button>
+        </div>
+    );
+}
+
+function GymStuff() {
+    const [embedCode, setEmbedCode] = useState<string>(EMBED_CODE("https://rwtf.dorianko.ch"));
+    const [picUrl, setPicUrl] = useState<string>("https://rwtf.dorianko.ch/embed_picture.png");
+
+    useEffect(() => {
+        setEmbedCode(EMBED_CODE(window.location.origin));
+        setPicUrl(`${window.location.origin}/embed_picture.png`);
+    }, []);
 
     return (
         <div className="card mt-3">
@@ -354,22 +368,12 @@ function GymStuff() {
                     <h4>Embed</h4>
                     <small>
                         Embed this chart in your moodle dashboard with the following code:
-                        <div className="input-group my-2">
-                            <input
-                                type="text"
-                                className="form-control"
-                                value={embedCode}
-                                onClick={copyEmbed}
-                                ref={inputRef}
-                            />
-                            <button
-                                className="btn btn-outline-secondary"
-                                type="button"
-                                onClick={copyEmbed}
-                            >
-                                Copy
-                            </button>
-                        </div>
+                        <CopyStation str={embedCode} />
+                    </small>
+                    <small>
+                        Want to write a bot? A screenshot of the graph is made every few minutes and
+                        published here:
+                        <CopyStation str={picUrl} />
                     </small>
                 </div>
             </div>
