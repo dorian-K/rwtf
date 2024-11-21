@@ -81,7 +81,7 @@ function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineR
             dashArray: [0, 1, 1].concat(new Array(historicData.length).fill(3)),
         },
         title: {
-            text: "RWTH Gym Auslastung",
+            text: "RWTH Gym Utilization",
             align: "left",
         },
         theme: {
@@ -150,7 +150,7 @@ function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineR
 
     let series: ApexAxisChartSeries = [
         {
-            name: "Auslastung",
+            name: "Utilization",
             zIndex: 1,
             data: data.map((g) => ({
                 x: g.created_at,
@@ -315,13 +315,13 @@ function GymStuff() {
     return (
         <div className="card mt-3">
             <div className="card-header">
-                RWTH Gym Auslastung (
+                RWTH Gym Utilization (
                 <a href="https://buchung.hsz.rwth-aachen.de/angebote/aktueller_zeitraum/_Auslastung.html">
-                    Datenquelle
+                    Datasource
                 </a>
                 ,{" "}
                 <a href="https://hochschulsport.rwth-aachen.de/cms/HSZ/Sport/Sportanlagen/Sportzentrum-Koenigshuegel/~jpwb/RWTH-GYM/">
-                    Öffnungszeiten
+                    Opening hours
                 </a>
                 )
             </div>
@@ -333,14 +333,14 @@ function GymStuff() {
                     <small>
                         <dl>
                             <dt>
-                                <strong>Auslastung</strong>:
+                                <strong>Utilization</strong>:
                             </dt>
                             <dd>Number of people in the gym as reported by HSZ.</dd>
                             <dt>
                                 <strong>Historic Avg</strong>:
                             </dt>
                             <dd>
-                                Average auslastung on this day of the week over the last couple of
+                                Average utilization on this day of the week over the last couple of
                                 weeks/months.
                             </dd>
                             <dt>
