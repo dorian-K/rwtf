@@ -12,9 +12,11 @@ services:
     volumes:
       - webapp-content:/out
   server:
+    user: 1000:1000
     networks:
       - rwtf_network
   mariadb:
+    user: 1000:1000
     networks:
       - rwtf_network
 

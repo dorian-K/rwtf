@@ -5,6 +5,7 @@
   "scripts": {
     "start": "tsc && node dist/src/index.js",
     "build": "tsc",
+    "start-without-build": "node dist/src/index.js",
     "test": "tsc && node dist/test/test_label_images.js"
   },
   "author": "",
