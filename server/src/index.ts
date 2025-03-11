@@ -195,7 +195,7 @@ if(!process.env.WIFIAP_TOKEN){
 }
 app.post("/api/v1/wifiap", limiterPost, express.json(), async (req, res) => {
     const data = req.body;
-    if (!data || !data.data || !data.version) {
+    if (!data || !data.data || !data.version || !data.header) {
         res.status(400).send('{error: true, msg: "Invalid body"}');
         return;
     }
@@ -218,24 +218,29 @@ app.post("/api/v1/wifiap", limiterPost, express.json(), async (req, res) => {
 
     let conn;
     try {
+        let keys = data.header;
         conn = await getConnection();
         await conn.beginTransaction();
         try {
-            for (const row of data.data) {
-            await conn.query(
-                `INSERT INTO wifi_data (building, apname, location, users_2_4_ghz, users_5_ghz, online, last_online, organisation) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ON DUPLICATE KEY UPDATE apname=apname`,
-                [
-                row["Gebäude"],
-                row["Name"],
-                row["Cover / Ort"],
-                row["Nutzer 2.4 GHz"],
-                row["Nutzer 5 GHz"],
-                row["Online"] ? 1 : 0,
-                new Date(row["Zuletzt als online geprüft"]),
-                row["Organisation"],
-                ]
-            );
+            for (const rowWithoutKeys of data.data) {
+                let row: any = {};
+                for (let i = 0; i < keys.length; i++) {
+                    row[keys[i]] = rowWithoutKeys[i];
+                }
+                await conn.query(
+                    `INSERT INTO wifi_data (building, apname, location, users_2_4_ghz, users_5_ghz, online, last_online, organisation) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ON DUPLICATE KEY UPDATE apname=apname`,
+                    [
+                    row["Gebäude"],
+                    row["Name"],
+                    row["Cover / Ort"],
+                    row["Nutzer 2.4 GHz"],
+                    row["Nutzer 5 GHz"],
+                    row["Online"] ? 1 : 0,
+                    new Date(row["Zuletzt als online geprüft"]),
+                    row["Organisation"],
+                    ]
+                );
             }
             await conn.commit();
         } catch (err) {

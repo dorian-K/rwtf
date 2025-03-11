@@ -101,15 +101,23 @@ for building in buildings:
     all_data.extend(grab_data(url))
 
 # combine all data
+header = list(all_data[0].keys())
 seen_aps = set()
 table_data = []
 for data in all_data:
     if data["Name"] not in seen_aps:
-        table_data.append(data)
+        vals = []
+        assert len(data) == len(header) and all(
+            key in header for key in data
+        ), f"Data {data} does not match header {header}"
+        for key in header:
+            vals.append(data[key])
+        table_data.append(vals)
         seen_aps.add(data["Name"])
 
 send_data = {
     "version": 1,
+    "header": header,
     "data": table_data,
 }
 
