@@ -1,0 +1,3 @@
+
+*/10 * * * * /app/run.sh
+@reboot /app/run.sh

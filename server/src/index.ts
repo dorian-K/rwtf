@@ -183,6 +183,59 @@ app.get("/api/v1/gym_interpline", async (req, res) => {
         if (conn) conn.end();
     }
 });
+const limiterPost = rateLimit({
+    windowMs: 5 * 60 * 1000, // 5 req / 5 minute
+    max: 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+app.post("/api/v1/wifiap", limiterPost, async (req, res) => {
+    const data = req.body;
+    if (data.version !== 1) {
+        res.status(400).send('{error: true, msg: "Invalid version"}');
+        return;
+    }
+    // get token from url
+    const token = req.query.token;
+    if (token !== process.env.WIFIAP_TOKEN) {
+        res.status(403).send('{error: true, msg: "Invalid token"}');
+        return;
+    }
+
+    let conn;
+    try {
+        conn = await getConnection();
+        await conn.beginTransaction();
+        try {
+            for (const row of data.data) {
+            await conn.query(
+                `INSERT INTO wifi_data (building, apname, location, users_2_4_ghz, users_5_ghz, online, last_online, organisation) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE apname=apname`,
+                [
+                row["Gebäude"],
+                row["Name"],
+                row["Cover / Ort"],
+                row["Nutzer 2.4 GHz"],
+                row["Nutzer 5 GHz"],
+                row["Online"] ? 1 : 0,
+                new Date(row["Zuletzt als online geprüft"]),
+                row["Organisation"],
+                ]
+            );
+            }
+            await conn.commit();
+        } catch (err) {
+            await conn.rollback();
+            throw err;
+        }
+        res.json({ status: "ok" });
+    } catch (err) {
+        console.error(err);
+        res.status(500).send("{error: true}");
+    } finally {
+        if (conn) conn.end();
+    }
+});
 
 const limiterdoc1 = rateLimit({
     windowMs: 1 * 60 * 1000, // 10 reqs / 1 minute
@@ -213,6 +266,25 @@ const database_init = async () => {
     let conn;
     try {
         conn = await getConnection();
+
+        await conn.query(
+            `CREATE TABLE IF NOT EXISTS wifi_data (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                insert_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                building VARCHAR(255) NOT NULL,
+                apname VARCHAR(255) NOT NULL,
+                location VARCHAR(255) NOT NULL,
+                users_2_4_ghz INT NOT NULL,
+                users_5_ghz INT NOT NULL,
+                online INT NOT NULL,
+                last_online TIMESTAMP NOT NULL,
+                organisation VARCHAR(255) NOT NULL,
+
+                UNIQUE KEY unique_apname_last_online (apname, last_online)
+            )`
+        );
+        await conn.query("CREATE INDEX IF NOT EXISTS idx_insert_time ON wifi_data (last_online)");
+
         await conn.query(
             "CREATE TABLE IF NOT EXISTS rwth_gym (id INT AUTO_INCREMENT PRIMARY KEY, auslastung INT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
         );
