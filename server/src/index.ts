@@ -193,8 +193,12 @@ const limiterPost = rateLimit({
 if(!process.env.WIFIAP_TOKEN){
     console.error("WIFIAP_TOKEN not set!");
 }
-app.post("/api/v1/wifiap", limiterPost, async (req, res) => {
+app.post("/api/v1/wifiap", limiterPost, express.json(), async (req, res) => {
     const data = req.body;
+    if (!data || !data.data || !data.version) {
+        res.status(400).send('{error: true, msg: "Invalid body"}');
+        return;
+    }
     if (data.version !== 1) {
         res.status(400).send('{error: true, msg: "Invalid version"}');
         return;
