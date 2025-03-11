@@ -11,6 +11,7 @@ load_dotenv()
 server_url = os.getenv("SERVER_URL")
 assert server_url, "SERVER_URL must be set in .env"
 
+
 def grab_data(url):
 
     # Fetch the page content
@@ -29,8 +30,8 @@ def grab_data(url):
     # Extract table rows
     rows = table.find_all("tr")
 
-    keypath = '#breadcrumbs > nav > div > div > ol > li:nth-child(3) > a'
-    valuepath = '#breadcrumbs > nav > div > div > ol > li:nth-child(4) > div'
+    keypath = "#breadcrumbs > nav > div > div > ol > li:nth-child(3) > a"
+    valuepath = "#breadcrumbs > nav > div > div > ol > li:nth-child(4) > div"
     key = soup.select_one(keypath).get_text(strip=True)
     value = soup.select_one(valuepath).get_text(strip=True)
     key = key.replace("Organisationen", "Organisation")
@@ -45,13 +46,17 @@ def grab_data(url):
             data = data + [value]
 
             if len(data) != len(header):
-                print(f"Row {data} has different number of columns than header {header}")
+                print(
+                    f"Row {data} has different number of columns than header {header}"
+                )
                 continue
             if data[0] == "Gesamt":
                 break
             idx_for_online = header.index("Online")
             # online col has an <i> tag with class "fa fa-check"
-            data[idx_for_online] = "fa-check" in cells[idx_for_online].find("i")["class"]
+            data[idx_for_online] = (
+                "fa-check" in cells[idx_for_online].find("i")["class"]
+            )
 
             data = dict(zip(header, data))
 
@@ -63,28 +68,32 @@ def grab_data(url):
                 assert key not in header
                 header = header + [key]
                 print(header)
-    
+
     import time
+
     time.sleep(1)
     return table_data
 
+
 orgs = [
-    'ORG-42NHW', # itcenter
-    'ORG-46EVW', # bib
-    'ORG-59BSY', # hsz
-    'ORG-87MDR', # fsmpi
+    "ORG-42NHW",  # itcenter
+    "ORG-46EVW",  # bib
+    "ORG-59BSY",  # hsz
+    "ORG-87MDR",  # fsmpi
 ]
 buildings = [
-    '1960', # academica
-    '2356', # as55 e12
-    '1385', # carl
-    '1580', # semi90
+    "1960",  # academica
+    "2356",  # as55 e12
+    "1385",  # carl
+    "1580",  # semi90
 ]
 
 # todo error handling
 all_data = []
 for org in orgs:
-    url = f"https://noc-portal.itc.rwth-aachen.de/mops-admin/coverage/organizations/{org}"
+    url = (
+        f"https://noc-portal.itc.rwth-aachen.de/mops-admin/coverage/organizations/{org}"
+    )
     all_data.extend(grab_data(url))
 
 for building in buildings:
@@ -111,6 +120,8 @@ json_data = json.dumps(send_data)
 headers = {"Content-Type": "application/json"}
 response = requests.post(server_url, data=json_data, headers=headers)
 
-print(f'Status code: {response.status_code}')
-print(f'Response: {response.text}')
-
+print(f"Status code: {response.status_code}")
+print(f"Response: {response.text}")
+# dump the response on error
+if response.status_code != 200:
+    print(f"Response: {response}")

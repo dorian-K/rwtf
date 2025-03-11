@@ -1,0 +1,7 @@
+services:
+  wifiapclient:
+    build: .
+    init: true
+    restart: unless-stopped
+    environment:
+      - TZ=Europe/Berlin
