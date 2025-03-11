@@ -6,6 +6,7 @@ import { SAMPLE } from "./sample_data.js";
 import { downloadStreamFile, isAachener } from "./study.js";
 import { rateLimit } from "express-rate-limit";
 import makeInterpLine, { GymDataWeek } from "./gym_math.js";
+import 'dotenv/config'
 
 const app = express();
 app.set("trust proxy", ["loopback", "linklocal", "uniquelocal"]);
@@ -189,10 +190,19 @@ const limiterPost = rateLimit({
     standardHeaders: true,
     legacyHeaders: false,
 });
+if(!process.env.WIFIAP_TOKEN){
+    console.error("WIFIAP_TOKEN not set!");
+}
 app.post("/api/v1/wifiap", limiterPost, async (req, res) => {
     const data = req.body;
     if (data.version !== 1) {
         res.status(400).send('{error: true, msg: "Invalid version"}');
+        return;
+    }
+
+    // maybe our wifiap token is not set correctly
+    if(!process.env.WIFIAP_TOKEN) {
+        res.status(500).send('{error: true, msg: "Server not correctly configured"}');
         return;
     }
     // get token from url
