@@ -7,6 +7,7 @@ import { downloadStreamFile, isAachener } from "./study.js";
 import { rateLimit } from "express-rate-limit";
 import makeInterpLine, { GymDataWeek } from "./gym_math.js";
 import 'dotenv/config'
+import { parse } from "date-fns";
 
 const app = express();
 app.set("trust proxy", ["loopback", "linklocal", "uniquelocal"]);
@@ -237,7 +238,7 @@ app.post("/api/v1/wifiap", limiterPost, express.json(), async (req, res) => {
                     row["Nutzer 2.4 GHz"],
                     row["Nutzer 5 GHz"],
                     row["Online"] ? 1 : 0,
-                    new Date(row["Zuletzt als online geprüft"]),
+                    parse(row["Zuletzt als online geprüft"], "dd.MM.yyyy HH:mm", new Date()),
                     row["Organisation"],
                     ]
                 );
