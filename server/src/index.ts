@@ -293,12 +293,12 @@ const database_init = async () => {
 
         await conn.query(
             `CREATE TABLE IF NOT EXISTS wifi_data (
-                id INT AUTO_INCREMENT PRIMARY KEY,
+                id SERIAL PRIMARY KEY,
                 insert_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                apname VARCHAR(255) NOT NULL,
-                users_2_4_ghz INT NOT NULL,
-                users_5_ghz INT NOT NULL,
-                online INT NOT NULL,
+                apname VARCHAR(100) NOT NULL,
+                users_2_4_ghz SMALLINT NOT NULL,
+                users_5_ghz SMALLINT NOT NULL,
+                online SMALLINT NOT NULL,
                 last_online TIMESTAMP NOT NULL,
 
                 UNIQUE KEY unique_apname_last_online (apname, last_online)
