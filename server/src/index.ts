@@ -228,18 +228,22 @@ app.post("/api/v1/wifiap", limiterPost, express.json({limit: "500kb"}), async (r
                 for (let i = 0; i < keys.length; i++) {
                     row[keys[i]] = rowWithoutKeys[i];
                 }
+                // insert into wifi_data_apnames
                 await conn.query(
-                    `INSERT INTO wifi_data (building, apname, location, users_2_4_ghz, users_5_ghz, online, last_online, organisation) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    `INSERT INTO wifi_data_apnames (apname, location, building, organisation) VALUES (?, ?, ?, ?)
+                    ON DUPLICATE KEY UPDATE apname=apname`,
+                    [row["Name"], row["Cover / Ort"], row["Gebäude"], row["Organisation"]]
+                );
+                // insert into wifi_data
+                await conn.query(
+                    `INSERT INTO wifi_data (apname, users_2_4_ghz, users_5_ghz, online, last_online) VALUES (?, ?, ?, ?, ?)
                     ON DUPLICATE KEY UPDATE apname=apname`,
                     [
-                    row["Gebäude"],
                     row["Name"],
-                    row["Cover / Ort"],
                     row["Nutzer 2.4 GHz"],
                     row["Nutzer 5 GHz"],
                     row["Online"] ? 1 : 0,
                     parse(row["Zuletzt als online geprüft"], "dd.MM.yyyy HH:mm", new Date()),
-                    row["Organisation"],
                     ]
                 );
             }
@@ -291,19 +295,31 @@ const database_init = async () => {
             `CREATE TABLE IF NOT EXISTS wifi_data (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 insert_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                building VARCHAR(255) NOT NULL,
                 apname VARCHAR(255) NOT NULL,
-                location VARCHAR(255) NOT NULL,
                 users_2_4_ghz INT NOT NULL,
                 users_5_ghz INT NOT NULL,
                 online INT NOT NULL,
                 last_online TIMESTAMP NOT NULL,
-                organisation VARCHAR(255) NOT NULL,
 
                 UNIQUE KEY unique_apname_last_online (apname, last_online)
             )`
         );
         await conn.query("CREATE INDEX IF NOT EXISTS idx_insert_time ON wifi_data (last_online)");
+        await conn.query("CREATE INDEX IF NOT EXISTS idx_apname ON wifi_data (apname)");
+
+        await conn.query(
+            `CREATE TABLE IF NOT EXISTS wifi_data_apnames (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                insert_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                apname VARCHAR(255) NOT NULL,
+                location VARCHAR(255) NOT NULL,
+                building VARCHAR(255) NOT NULL,
+                organisation VARCHAR(255) NOT NULL,
+
+                UNIQUE KEY unique_apname_combo (apname, location, building, organisation)
+            )`
+        );
+        await conn.query("CREATE INDEX IF NOT EXISTS idx_apname ON wifi_data_apnames (apname)");
 
         await conn.query(
             "CREATE TABLE IF NOT EXISTS rwth_gym (id INT AUTO_INCREMENT PRIMARY KEY, auslastung INT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
