@@ -37,6 +37,11 @@ async function takeScreenshot() {
             width: 900,
             height: 530, 
         });
+        let wantedTimezone = 'Europe/Berlin';
+        if (process.env.TZ && process.env.TZ !== '') {
+            wantedTimezone = process.env.TZ;
+        }
+        await page.emulateTimezone(wantedTimezone);
 
         // Navigate to your website
         await page.goto(url, {
