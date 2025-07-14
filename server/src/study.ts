@@ -106,7 +106,7 @@ async function downloadStudyFunky(origUrl: string) {
     // wait for file to be saved
     console.log("Downloading file...");
     await new Promise((resolve) => {
-        dest.on("finish", resolve);
+        dest.on("finish", () => resolve(null));
     });
     console.log("Downloaded file to", savePath);
 
