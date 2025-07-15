@@ -1,21 +1,27 @@
 import pandas as pd
 import os
 import torch
+import json
 import datetime
 from torch.utils.data import DataLoader
 
 import random
 from torch.optim.swa_utils import AveragedModel, SWALR
 
-from .data import dataset, validation_dataset, dataset_recent
+from .data import dataset, validation_dataset, dataset_recent, dataset_arrival, validation_dataset_arrival, dataset_arrival_recent
 from .model import TransformerDecoder
 
+use_arrival_data = True  
+main_ds = dataset_arrival if use_arrival_data else dataset
+validation_ds = validation_dataset_arrival if use_arrival_data else validation_dataset
+main_recent_ds = dataset_arrival_recent if use_arrival_data else dataset_recent
+
 # create the model
-model = TransformerDecoder(d_model=32, nhead=2, num_layers=2, dropout_rate=0.0)
+model = TransformerDecoder(d_model=128, nhead=1, num_layers=2, dropout_rate=0.0, maxval=dataset.maxval, logscale_tricks=False)
 # print the model
 print(model)
-print("Model parameters:", sum(p.numel() for p in model.parameters() if p.requires_grad))
-print("Model trainable parameters:", sum(p.numel() for p in model.parameters() if p.requires_grad and p.dim() > 1))  # Exclude biases
+print("Model parameters:", sum(p.numel() for p in model.parameters()))
+print("Model trainable parameters:", sum(p.numel() for p in model.parameters() if p.requires_grad))  # Exclude biases
 
 # model = torch.compile(model, fullgraph=True)  # Compile the model for better performance
 
@@ -24,19 +30,24 @@ print("Model trainable parameters:", sum(p.numel() for p in model.parameters() i
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = model.to(device)
 
-learning_rate = 5e-3
-optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate / 100, weight_decay=1e-4)
+learning_rate = 1e-3
+optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=0)
 criterion = torch.nn.MSELoss()
+#criterion = torch.nn.L1Loss()  # Use L1 loss for robustness against outliers
 
-dataloader_train = DataLoader(dataset, batch_size=16, shuffle=True)
-dataloader_validation = DataLoader(validation_dataset, batch_size=8, shuffle=False)
+dataloader_train = DataLoader(main_ds, batch_size=8, shuffle=True)
+dataloader_validation = DataLoader(validation_ds, batch_size=8, shuffle=False)
 
-EPOCHS = 200
+EPOCHS = 50
+SWITCH_TO_RECENT_AT = 45
+ENABLE_SEQUENCE_TRAINING_AT = 40
 
+all_stats = []
 
-swa_model = AveragedModel(model)
-swa_start = 140  # Start SWA after 140 epochs
-swa_scheduler = SWALR(optimizer, swa_lr=1e-3, anneal_epochs=60, anneal_strategy='cos')
+def save_all_stats():
+    # save all stats to a single file
+    with open(os.path.join(os.path.dirname(__file__), "models/stats.json"), 'w') as f:
+        json.dump(all_stats, f, indent=4)
 
 for epoch in range(EPOCHS):
     model.train()
@@ -44,11 +55,13 @@ for epoch in range(EPOCHS):
     total_loss_validation = 0
     step_train = 0
     for batch in dataloader_train:
-        batch = batch.to(device)
+        batch: torch.Tensor = batch.to(device)
         optimizer.zero_grad()
         in_x = batch[:, :-1]  # (batch_size, seq_length-1)
+        cur_batchsize = in_x.size(0)
 
-        if random.random() < 0.5 and epoch > 50:
+        # sequence training
+        if random.random() < 0.5 and epoch > ENABLE_SEQUENCE_TRAINING_AT:
             start_search_at = random.randint(1, in_x.size(1) - 1)
 
             in_x_search = in_x[:, :start_search_at].clone()
@@ -66,7 +79,7 @@ for epoch in range(EPOCHS):
         output = output.permute(1, 0, 2)  # (batch_size, seq_length-1, 1)
         #loss = criterion(torch.log(1 + output), torch.log(1 + target.unsqueeze(-1)))  # target needs to be of shape (batch_size, seq_length, 1)
         loss = criterion(output, target.unsqueeze(-1))  # target needs to be of shape (batch_size, seq_length, 1)
-       
+        # loss = loss / cur_batchsize # feels right
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)  # Gradient clipping
         optimizer.step()
@@ -74,7 +87,7 @@ for epoch in range(EPOCHS):
         step_train += 1
         if step_train % 10 == 0:
             print(f"Epoch {epoch}/{EPOCHS}, Step {step_train}, Loss: {loss.item():.4f}")
-    # Validation
+    # Validation 
     model.eval()
     step_valid = 0
     for batch in dataloader_validation:
@@ -86,65 +99,56 @@ for epoch in range(EPOCHS):
             target = batch[:, 1:]
             output = output.permute(1, 0, 2)  # (batch_size, seq_length-1, 1)
 
-            #if step_valid == 0:
-                #print("Input", in_x.shape)
-                #print("Output", output.shape)
+            if step_valid == 0:
+                print("Input", in_x.shape)
+                print("Output", output.shape)
                 # print first batch dimension
-                #expected = target[0, :].tolist()
-                #Predicted = output[0, :, 0].tolist()
+                fr = 60
+                to = fr + 20
+                expected = target[0, fr:to].tolist()
+                predicted = output[0, fr:to, 0].tolist()
                 # zip them together
-                #for i, (exp, pred) in enumerate(zip(expected, predicted)):
-                #    print(f"Validation t={i+1}: Expected: {exp:.2f}, Predicted: {pred:.2f}")
+                for i, (exp, pred) in enumerate(zip(expected, predicted)):
+                   print(f"Validation t={i+1}: Expected: {exp:.2f}, Predicted: {pred:.2f}")
 
-            loss = criterion(torch.log(1 + output), torch.log(1 + target.unsqueeze(-1)))
+            loss = criterion(output, target.unsqueeze(-1))
             total_loss_validation += loss.item()
             step_valid += 1
-    if epoch >= swa_start:
-        swa_model.update_parameters(model)
-        swa_scheduler.step()
 
-    if epoch % 10 == 0:
+    
         # decrease learning rate
-        if epoch < swa_start and epoch % 50 == 0:
-            learning_rate *= 0.5
-            for param_group in optimizer.param_groups:
-                param_group['lr'] *= learning_rate
+        # if epoch < swa_start and epoch % 50 == 0:
+        #     learning_rate *= 0.5
+        #     for param_group in optimizer.param_groups:
+        #         param_group['lr'] *= learning_rate
         
-        if epoch == 90:
-            dataloader_train = DataLoader(dataset_recent, batch_size=24, shuffle=True)
-        
-        #torch.save(model.state_dict(), os.path.join(os.path.dirname(__file__), f'models/model_epoch_{epoch}.pt'))
+    if epoch == SWITCH_TO_RECENT_AT:
+        dataloader_train = DataLoader(main_recent_ds, batch_size=24, shuffle=True)
+    
+    # also save stats
+    stats = {
+        'epoch': epoch,
+        'train_loss': total_loss / step_train,
+        'valid_loss': total_loss_validation / step_valid,
+        'date': datetime.datetime.now().isoformat(),
+        'learning_rate': learning_rate,
+    }
+    all_stats.append(stats)
+    if epoch % 20 == 0:
         torch.save(model, os.path.join(os.path.dirname(__file__), f'models/model_epoch_{epoch}.ptp'))
-        # also save stats
-        stats = {
-            'epoch': epoch,
-            'train_loss': total_loss / step_train,
-            'valid_loss': total_loss_validation / step_valid,
-            'date': datetime.datetime.now().isoformat(),
-            'learning_rate': learning_rate,
-        }
         with open(os.path.join(os.path.dirname(__file__), f"models/stats_epoch_{epoch}.json"), 'w') as f:
             import json
             json.dump(stats, f, indent=4)
-    elif epoch <= 10:
-        for param_group in optimizer.param_groups:
-            param_group['lr'] = epoch / 10 * learning_rate
+        save_all_stats()
+    # elif epoch <= 10:
+    #     for param_group in optimizer.param_groups:
+    #         param_group['lr'] = epoch / 10 * learning_rate
 
     print(f"Epoch {epoch}/{EPOCHS}, Training Loss: {total_loss/step_train:.4f}, Validation Loss: {total_loss_validation/step_valid:.4f}")
 
 # save the final model
-torch.save(model.state_dict(), os.path.join(os.path.dirname(__file__), "models/model_final.pt"))
-torch.save(swa_model.state_dict(),os.path.join(os.path.dirname(__file__), "models/model_swa.pt"))
+torch.save(model, os.path.join(os.path.dirname(__file__), "models/model_final.ptp"))
 # summarize all stats
-import json
-stats = []
-for epoch in range(0, EPOCHS, 50):
-    try:
-        with open(os.path.join(os.path.dirname(__file__), f"models/stats_epoch_{epoch}.json"), 'r') as f:
-            stats.append(json.load(f))
-    except FileNotFoundError:
-        continue
+save_all_stats()
 
-# save all stats to a single file
-with open(os.path.join(os.path.dirname(__file__), "models/stats.json"), 'w') as f:
-    json.dump(stats, f, indent=4)
+
