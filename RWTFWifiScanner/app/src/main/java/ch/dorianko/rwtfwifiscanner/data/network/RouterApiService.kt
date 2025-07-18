@@ -5,7 +5,7 @@ import retrofit2.http.GET
 
 interface RouterApiService {
     // The path to the info endpoint
-    @GET("info")
+    @GET("client-info.json")
     suspend fun getRouterInfo(): Response<RouterApiResponse>
 
     @GET("gym_interpline?dayoffset=0")

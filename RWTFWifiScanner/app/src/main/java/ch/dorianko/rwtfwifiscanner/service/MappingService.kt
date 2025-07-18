@@ -30,6 +30,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 
@@ -137,16 +139,16 @@ class MappingService : Service() {
 
         if (gatewayIp.isNullOrEmpty()) {
             Log.e("MappingService", "Could not get gateway IP.")
-            return
+            //return
         }
 
         Log.d("MappingService", "New Wi-Fi connected. SSID: $ssid, BSSID: $bssid, Gateway: $gatewayIp")
         updateNotification("Connected to $ssid. Fetching data...")
 
-        fetchRouterInfoAndSave(gatewayIp, bssid)
+        fetchRouterInfoAndSave(bssid)
     }
 
-    private fun fetchRouterInfoAndSave(gatewayIp: String, bssid: String) {
+    private fun fetchRouterInfoAndSave(bssid: String) {
         serviceScope.launch {
             if (currentLocation == null) {
                 Log.w("MappingService", "Location not available yet. Skipping save.")
@@ -155,27 +157,45 @@ class MappingService : Service() {
             }
 
             try {
+                Log.i("MappingService", "Getting ap info...")
                 // Create a new Retrofit instance for each gateway
                 val retrofit = Retrofit.Builder()
-                    .baseUrl("https://rwtf.dorianko.ch/api/v1/")
+                    //.baseUrl("https://rwtf.dorianko.ch/api/v1/")
+                    .baseUrl("https://findme.rwth-aachen.de/")
                     .addConverterFactory(GsonConverterFactory.create())
                     .build()
 
                 val apiService = retrofit.create(RouterApiService::class.java)
-                //val response = apiService.getRouterInfo()
-                val response = apiService.getIp()
+                val response = apiService.getRouterInfo()
+                //val response = apiService.getIp()
 
                 if (response.isSuccessful && response.body() != null) {
                     //val routerName = response.body()!!.routerName
-                    val routerName = response.body()!!.query
-
+                    //val routerName = response.body()!!.query
+                    val html = response.body()!!.html
                 //val routerName = "dummy router"
+                    val doc: Document = Jsoup.parse(html)
+
+                    val data = mutableMapOf<String, String>()
+
+                    // First table (key-value pairs)
+                    val firstTable = doc.select("table").first()
+                    firstTable?.select("tr")?.forEach { row ->
+                        val th = row.selectFirst("th")?.text()?.trim()
+                        val td = row.selectFirst("td")?.text()?.trim()
+                        if (th != null && td != null) {
+                            data[th] = td
+                            Log.i("MappingService", "$th: $td")
+                        }
+                    }
+                    val routerName: String = data["Access Point"]!!
                     val routerData = RouterInfo(
                         bssid = bssid,
                         name = routerName,
                         latitude = currentLocation!!.latitude,
                         longitude = currentLocation!!.longitude,
-                        timestamp = System.currentTimeMillis()
+                        timestamp = System.currentTimeMillis(),
+                        fullHtml = html
                     )
                     db.routerInfoDao().insert(routerData)
                     Log.i("MappingService", "SUCCESS: Saved data for $routerName ($bssid)")
@@ -183,12 +203,12 @@ class MappingService : Service() {
                 } else {
                     Log.e("MappingService", "API call failed: ${response.code()} - ${response.message()}")
                     Log.e("MappingService", response.toString())
-                    updateNotification("Error: Failed to fetch info from $gatewayIp")
+                    updateNotification("Error: Failed to fetch info")
                 }
 
             } catch (e: Exception) {
                 Log.e("MappingService", "Exception during API call: ${e.message}")
-                updateNotification("Error: Could not connect to $gatewayIp")
+                updateNotification("Error: Could not connect")
             } finally {
                 // Reset BSSID after processing to allow re-mapping if needed
                 // currentBssid = null
