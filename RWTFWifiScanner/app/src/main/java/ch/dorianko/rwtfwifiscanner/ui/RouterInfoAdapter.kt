@@ -29,7 +29,7 @@ class RouterInfoAdapter : ListAdapter<RouterInfo, RouterInfoAdapter.RouterViewHo
         private val bssidTextView: TextView = itemView.findViewById(R.id.tvBssid)
 
         fun bind(routerInfo: RouterInfo) {
-            nameTextView.text = routerInfo.name
+            nameTextView.text = "${routerInfo.name} (ID ${routerInfo.id}"
             coordsTextView.text = "Coords: ${routerInfo.latitude}, ${routerInfo.longitude}"
             bssidTextView.text = "BSSID: ${routerInfo.bssid}"
         }
@@ -38,7 +38,8 @@ class RouterInfoAdapter : ListAdapter<RouterInfo, RouterInfoAdapter.RouterViewHo
 
 class RouterDiffCallback : DiffUtil.ItemCallback<RouterInfo>() {
     override fun areItemsTheSame(oldItem: RouterInfo, newItem: RouterInfo): Boolean {
-        return oldItem.bssid == newItem.bssid
+        //return oldItem.bssid == newItem.bssid
+        return oldItem.id == newItem.id;
     }
 
     override fun areContentsTheSame(oldItem: RouterInfo, newItem: RouterInfo): Boolean {

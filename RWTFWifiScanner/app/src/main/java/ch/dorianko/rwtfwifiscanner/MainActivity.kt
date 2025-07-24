@@ -103,7 +103,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun observeRouterData() {
-        db.routerInfoDao().getAllRouterInfo().observe(this) { routerList ->
+        db.routerInfoDao().getSomeRouterInfo().observe(this) { routerList ->
             routerAdapter.submitList(routerList)
         }
     }

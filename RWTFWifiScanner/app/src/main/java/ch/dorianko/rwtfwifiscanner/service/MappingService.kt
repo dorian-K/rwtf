@@ -190,6 +190,7 @@ class MappingService : Service() {
                     }
                     val routerName: String = data["Access Point"]!!
                     val routerData = RouterInfo(
+                        id = 0,
                         bssid = bssid,
                         name = routerName,
                         latitude = currentLocation!!.latitude,
