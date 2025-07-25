@@ -8,7 +8,7 @@ import { rateLimit } from "express-rate-limit";
 import makeInterpLine, { GymDataWeek } from "./gym_math.js";
 import 'dotenv/config'
 import { parse } from "date-fns";
-import {h64} from "xxhashjs";
+import XXH from "xxhashjs";
 import stringify from "json-stable-stringify";
 
 const app = express();
@@ -273,7 +273,7 @@ app.post("/api/v1/wifiap", limiterPost, express.json({limit: "500kb"}), async (r
 
 function hashObj(obj: any): string {
     const canonical = stringify(obj)!;
-    return h64(canonical, 0xCAFEBABE).toString(16); // seed is arbitrary
+    return XXH.h64(canonical, 0xCAFEBABE).toString(16); // seed is arbitrary
 }
 
 app.post("/api/v1/upload", limiterPost, express.json({limit: "1000kb"}), async (req, res) => {
