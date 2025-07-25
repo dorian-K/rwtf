@@ -386,7 +386,7 @@ const database_init = async () => {
                 apname VARCHAR(255) NOT NULL,
                 latitude DECIMAL(10, 7) NOT NULL,
                 longitude DECIMAL(10, 7) NOT NULL,
-                raw JSON TEXT NOT NULL,
+                raw JSON NOT NULL,
             )`
         );
         await conn.query("CREATE INDEX IF NOT EXISTS idx_loc_apname ON wifi_data_aplocations (apname)");
