@@ -174,10 +174,12 @@ export async function isAachener(req: Request, res: Response) {
             const js: any = await resp.json();
             //console.log(js);
             if (js.error) {
+                console.log(js);
                 //res.status(403).send({ error: true, msg: "Invalid IP" });
                 return false;
             }
             if (js.city !== "Aachen") {
+                console.log("Invalid city", js.city, "for IP", ip);
                 //res.status(403).send({ error: true, msg: "Invalid IP" });
                 // add to invalid list
                 invalid_ip_ranges.push(ip + "/16");
@@ -197,7 +199,7 @@ export async function isAachener(req: Request, res: Response) {
                 valid_ip_ranges.shift();
             }
 
-            //console.log("Valid IP", ip);
+            console.log("Valid IP", ip);
         } else {
             //console.log("Loaded from cache");
         }

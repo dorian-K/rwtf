@@ -2,6 +2,7 @@ services:
   rwtf_nginx:
     depends_on:
       - webapp
+      - server
     networks:
       - rwtf_network
   screenshot:
