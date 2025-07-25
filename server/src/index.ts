@@ -261,6 +261,56 @@ app.post("/api/v1/wifiap", limiterPost, express.json({limit: "500kb"}), async (r
     }
 });
 
+app.post("/api/v1/upload", limiterPost, express.json({limit: "1000kb"}), async (req, res) => {
+    const data = req.body;
+
+    if (!data || !data.deviceId || !data.version || data.version !==1 || !data.data) {
+        res.status(400).send('{"ok": false, "msg": "Invalid body"}');
+        return;
+    }
+
+    const deviceId = data.deviceId;
+    const rawData = data.data;
+    // check datatypes
+    if (!Array.isArray(rawData) || rawData.length === 0) {
+        res.status(400).send('{"ok": false, "msg":  "Invalid data"}');
+        return;
+    }
+    if(deviceId.length > 254 || deviceId.length < 1) {
+        res.status(400).send('{"ok": false, "msg":  "Device ID too long"}');
+        return;
+    }
+
+    let conn;
+    try {
+        conn = await getConnection();
+        await conn.beginTransaction();
+        try {
+            for (const row of rawData) {
+                if (!row.name || !row.latitude || !row.longitude) {
+                    res.status(400).send('{"ok": false, "msg": "Invalid data"}');
+                    return;
+                }
+                // insert into wifi_data_aplocations
+                await conn.query(
+                    `INSERT INTO wifi_data_aplocations (uploader_id, apname, latitude, longitude, raw) VALUES (?, ?, ?, ?, ?)`,
+                    [deviceId, row.name, row.latitude, row.longitude, JSON.stringify(row)]
+                );
+            }
+            await conn.commit();
+        } catch (err) {
+            await conn.rollback();
+            throw err;
+        }
+        res.json({ ok: true });
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('{"ok": false}');
+    } finally {
+        if (conn) conn.end();
+    }
+});
+
 const limiterdoc1 = rateLimit({
     windowMs: 1 * 60 * 1000, // 10 reqs / 1 minute
     limit: 10,
@@ -322,6 +372,18 @@ const database_init = async () => {
         await conn.query("CREATE INDEX IF NOT EXISTS idx_apname ON wifi_data_apnames (apname)");
 
         await conn.query(
+            `CREATE TABLE IF NOT EXISTS wifi_data_aplocations (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                uploader_id VARCHAR(255) NOT NULL,
+                apname VARCHAR(255) NOT NULL,
+                latitude DECIMAL(10, 7) NOT NULL,
+                longitude DECIMAL(10, 7) NOT NULL,
+                raw JSON TEXT NOT NULL,
+            )`
+        );
+        await conn.query("CREATE INDEX IF NOT EXISTS idx_loc_apname ON wifi_data_aplocations (apname)");
+
+        await conn.query(
             "CREATE TABLE IF NOT EXISTS rwth_gym (id INT AUTO_INCREMENT PRIMARY KEY, auslastung INT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
         );
         // index for created_at
@@ -357,7 +419,7 @@ const database_init = async () => {
 
 // init database
 database_init()
-    .then(database_init)
+    //.then(database_init)
     .then(() => {
         setInterval(gymCrawl, 1000 * 60 * 5); // 5 minutes
         gymCrawl();
