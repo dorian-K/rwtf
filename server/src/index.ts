@@ -334,9 +334,9 @@ const limiterdoc2 = rateLimit({
 app.get("/api/v1/study", limiterdoc1, limiterdoc2, downloadStreamFile);
 app.get("/api/v1/is_aachen", async (req, res) => {
     if (await isAachener(req, res)) {
-        res.json({ status: true });
+        res.json({ status: true, ip: req.ip });
     } else {
-        res.json({ status: false });
+        res.json({ status: false, ip: req.ip });
     }
 });
 
@@ -386,7 +386,7 @@ const database_init = async () => {
                 apname VARCHAR(255) NOT NULL,
                 latitude DECIMAL(10, 7) NOT NULL,
                 longitude DECIMAL(10, 7) NOT NULL,
-                raw JSON NOT NULL,
+                raw JSON NOT NULL
             )`
         );
         await conn.query("CREATE INDEX IF NOT EXISTS idx_loc_apname ON wifi_data_aplocations (apname)");
