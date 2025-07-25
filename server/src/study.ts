@@ -43,6 +43,12 @@ setInterval(() => {
     }
 }, 1000 * 60 * 60);
 
+class UserError extends Error {
+  constructor(message: string) {
+    super(message)
+  }
+}
+
 async function downloadStudyFunky(origUrl: string) {
     // check cache
     if (cachedFiles[origUrl] && fs.existsSync(cachedFiles[origUrl])) {
@@ -52,11 +58,11 @@ async function downloadStudyFunky(origUrl: string) {
 
     // extract id
     if (!origUrl.startsWith(BASE_URL)) {
-        throw new Error("Invalid url");
+        throw new UserError("Invalid url, needs to start with " + BASE_URL);
     }
     const docId = origUrl.split("/").pop()!.split("?")[0];
     if (!docId) {
-        throw new Error("Invalid url");
+        throw new UserError("Invalid url, could not extract document ID");
     }
     const url = `${BASE_URL}/document/${docId}`;
     const response = await fetch(url, {
@@ -73,7 +79,7 @@ async function downloadStudyFunky(origUrl: string) {
 
     let data = jResp["data"];
     if (!data.hasOwnProperty("filename") || !data.hasOwnProperty("file_preview")) {
-        throw new Error("Failed to fetch file, missing data");
+        throw new UserError("Failed to fetch file, missing data");
     }
     let name = data["filename"];
     let ending = name.split(".").pop();
@@ -84,7 +90,7 @@ async function downloadStudyFunky(origUrl: string) {
     const savePath = path.join(OS_TEMP, `${docId}.${ending}`);
     if (!savePath.startsWith(OS_TEMP)) {
         console.error("Invalid file path", savePath, name);
-        throw new Error("Invalid file path");
+        throw new UserError("Invalid local file path");
     }
 
     if (fs.existsSync(savePath)) {
@@ -232,6 +238,10 @@ export async function downloadStreamFile(req: Request, res: Response) {
         const filePath = await downloadStudyFunky(url);
         res.sendFile(filePath);
     } catch (err) {
+        if (err instanceof UserError) {
+            res.status(400).send({ error: true, msg: "Failed to download file: " + err.message });
+            return;
+        }
         console.error(err);
         res.status(500).send({ error: true, msg: "Failed to download file" });
     }
