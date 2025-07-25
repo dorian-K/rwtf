@@ -167,6 +167,7 @@ export async function isAachener(req: Request, res: Response) {
     if (!IP_RANGES.some((range) => ipRangeCheck(ip, range))) {
         // check cache first
         if (invalid_ip_ranges.some((range) => ipRangeCheck(ip, range))) {
+            console.log("Invalid IP", ip, "in invalid list");
             return false;
         }
         if (!valid_ip_ranges.some((range) => ipRangeCheck(ip, range))) {
@@ -201,10 +202,10 @@ export async function isAachener(req: Request, res: Response) {
 
             console.log("Valid IP", ip);
         } else {
-            //console.log("Loaded from cache");
+            console.log("Loaded from cache");
         }
     } else {
-        //console.log("Valid IP in hardcoded", ip);
+        console.log("Valid IP in hardcoded", ip);
     }
 
     return true;
