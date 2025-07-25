@@ -159,6 +159,7 @@ export async function isAachener(req: Request, res: Response) {
         "10.0.0.0/8",
         "172.16.0.0/12",
         "::1/128",
+        "62.155.192.0/20" // Joerg's home IP
     ];
     const ip = req.ip;
     if (!ip) {
@@ -167,15 +168,19 @@ export async function isAachener(req: Request, res: Response) {
     if (!IP_RANGES.some((range) => ipRangeCheck(ip, range))) {
         // check cache first
         if (invalid_ip_ranges.some((range) => ipRangeCheck(ip, range))) {
-            console.log("Invalid IP", ip, "in invalid list");
+            //console.log("Invalid IP", ip, "in invalid list");
             return false;
         }
         if (!valid_ip_ranges.some((range) => ipRangeCheck(ip, range))) {
-            const resp = await fetch(`https://ipapi.co/${ip}/json/`);
+            const resp = await fetch(`https://ipapi.co/${ip}/json/`, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:141.0) Gecko/20100101 Firefox/141.0'
+                }
+            });
             const js: any = await resp.json();
             //console.log(js);
             if (js.error) {
-                console.log(js);
+                //console.log(js);
                 //res.status(403).send({ error: true, msg: "Invalid IP" });
                 return false;
             }
@@ -183,7 +188,7 @@ export async function isAachener(req: Request, res: Response) {
                 console.log("Invalid city", js.city, "for IP", ip);
                 //res.status(403).send({ error: true, msg: "Invalid IP" });
                 // add to invalid list
-                invalid_ip_ranges.push(ip + "/16");
+                invalid_ip_ranges.push(js.network);
                 if (invalid_ip_ranges.length > 1000) {
                     invalid_ip_ranges.shift();
                 }
@@ -191,9 +196,9 @@ export async function isAachener(req: Request, res: Response) {
             }
             // add to valid list
             if (js.version === "IPv6") {
-                valid_ip_ranges.push(ip + "/64");
+                valid_ip_ranges.push(js.network);
             } else {
-                valid_ip_ranges.push(ip + "/16");
+                valid_ip_ranges.push(js.network);
             }
 
             if (valid_ip_ranges.length > 1000) {
@@ -202,10 +207,10 @@ export async function isAachener(req: Request, res: Response) {
 
             console.log("Valid IP", ip);
         } else {
-            console.log("Loaded from cache");
+            //console.log("Loaded from cache");
         }
     } else {
-        console.log("Valid IP in hardcoded", ip);
+        //console.log("Valid IP in hardcoded", ip);
     }
 
     return true;
