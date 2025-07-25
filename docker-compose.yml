@@ -1,6 +1,7 @@
 services:
   rwtf_nginx:
     image: nginx:mainline-alpine
+    pull_policy: always
     init: true
     restart: unless-stopped
     volumes:
@@ -23,6 +24,7 @@ services:
 
   mariadb:
     image: mariadb
+    pull_policy: always
     restart: unless-stopped
     environment:
       - MYSQL_ROOT_PASSWORD=secret

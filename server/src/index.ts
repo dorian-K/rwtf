@@ -234,18 +234,26 @@ app.post("/api/v1/wifiap", limiterPost, express.json({limit: "500kb"}), async (r
                     ON DUPLICATE KEY UPDATE apname=apname`,
                     [row["Name"], row["Cover / Ort"], row["Gebäude"], row["Organisation"]]
                 );
+
+                // check if the numbers are parseable ints
+                if (isNaN(parseInt(row["Nutzer 2.4 GHz"])) || isNaN(parseInt(row["Nutzer 5 GHz"]))) {
+                    console.error("Invalid data for wifiap", row);
+
+                }else{
+                     await conn.query(
+                        `INSERT INTO wifi_data (apname, users_2_4_ghz, users_5_ghz, online, last_online) VALUES (?, ?, ?, ?, ?)
+                        ON DUPLICATE KEY UPDATE apname=apname`,
+                        [
+                        row["Name"],
+                        row["Nutzer 2.4 GHz"],
+                        row["Nutzer 5 GHz"],
+                        row["Online"] ? 1 : 0,
+                        parse(row["Zuletzt als online geprüft"], "dd.MM.yyyy HH:mm", new Date()),
+                        ]
+                    );
+                }
                 // insert into wifi_data
-                await conn.query(
-                    `INSERT INTO wifi_data (apname, users_2_4_ghz, users_5_ghz, online, last_online) VALUES (?, ?, ?, ?, ?)
-                    ON DUPLICATE KEY UPDATE apname=apname`,
-                    [
-                    row["Name"],
-                    row["Nutzer 2.4 GHz"],
-                    row["Nutzer 5 GHz"],
-                    row["Online"] ? 1 : 0,
-                    parse(row["Zuletzt als online geprüft"], "dd.MM.yyyy HH:mm", new Date()),
-                    ]
-                );
+               
             }
             await conn.commit();
         } catch (err) {
