@@ -19,7 +19,7 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "wifi_mapper_database"
-                ).build()
+                ).fallbackToDestructiveMigrationFrom(1).build()
                 INSTANCE = instance
                 instance
             }

@@ -13,8 +13,10 @@ interface RouterInfoDao {
     suspend fun insert(routerInfo: RouterInfo)
 
     @Query("SELECT * FROM router_info ORDER BY timestamp")
-    fun getAllRouterInfo(): LiveData<List<RouterInfo>>
-
+    fun getAllRouterInfo(): List<RouterInfo>
     @Query("SELECT * FROM router_info ORDER BY timestamp DESC LIMIT 200")
     fun getSomeRouterInfo(): LiveData<List<RouterInfo>>
+
+    @Query("SELECT COUNT(*) FROM router_info")
+    fun getNumRouters(): LiveData<Integer>
 }

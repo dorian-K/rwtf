@@ -16,8 +16,10 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.widget.EditText
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -25,6 +27,8 @@ import ch.dorianko.rwtfwifiscanner.data.db.AppDatabase
 import ch.dorianko.rwtfwifiscanner.databinding.ActivityMainBinding
 import ch.dorianko.rwtfwifiscanner.service.MappingService
 import ch.dorianko.rwtfwifiscanner.ui.RouterInfoAdapter
+import java.util.UUID
+import androidx.core.content.edit
 
 class MainActivity : AppCompatActivity() {
 
@@ -71,8 +75,51 @@ class MainActivity : AppCompatActivity() {
                 startServiceWithAction(MappingService.ACTION_STOP_SERVICE)
             }
         }
+
+        binding.uploadBtn.setOnClickListener {
+            val prefs = getSharedPreferences("prefs", MODE_PRIVATE)
+            val savedId = prefs.getString("device_id", null)
+
+            if (savedId == null) {
+                // No ID yet, show prompt
+                promptForDeviceId(prefs)
+            } else {
+                if (hasPermissions()) {
+                    startServiceWithAction(MappingService.ACTION_UPLOAD)
+                } else {
+                    requestPermissionsLauncher.launch(permissions)
+                }
+            }
+        }
     }
 
+    private fun promptForDeviceId(prefs: android.content.SharedPreferences) {
+        val editText = EditText(this)
+        val defaultId = "id-" + UUID.randomUUID().toString().substring(0, 8).uppercase()
+        editText.hint = "e.g., $defaultId"
+
+        AlertDialog.Builder(this)
+            .setTitle("Enter Device ID")
+            .setMessage("You can provide a custom ID, or leave it empty to use a default one.")
+            .setView(editText)
+            .setCancelable(false)
+            .setPositiveButton("Save") { _, _ ->
+                val input = editText.text.toString().trim()
+                val deviceId = input.ifEmpty { defaultId }
+                prefs.edit { putString("device_id", deviceId) }
+                Toast.makeText(this, "Device ID set: $deviceId", Toast.LENGTH_LONG).show()
+
+                if (hasPermissions()) {
+                    startServiceWithAction(MappingService.ACTION_UPLOAD)
+                } else {
+                    requestPermissionsLauncher.launch(permissions)
+                }
+            }
+            .setNegativeButton("Cancel") { _, _ ->
+                Toast.makeText(this, "App requires a device ID to continue.", Toast.LENGTH_LONG).show()
+            }
+            .show()
+    }
 
     private fun handleStartService() {
         if (hasPermissions()) {
@@ -105,6 +152,11 @@ class MainActivity : AppCompatActivity() {
     private fun observeRouterData() {
         db.routerInfoDao().getSomeRouterInfo().observe(this) { routerList ->
             routerAdapter.submitList(routerList)
+        }
+
+        db.routerInfoDao().getNumRouters().observe(this) {
+            num ->
+            binding.numRouters.text = "${num}"
         }
     }
 }

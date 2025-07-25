@@ -29,7 +29,7 @@ class RouterInfoAdapter : ListAdapter<RouterInfo, RouterInfoAdapter.RouterViewHo
         private val bssidTextView: TextView = itemView.findViewById(R.id.tvBssid)
 
         fun bind(routerInfo: RouterInfo) {
-            nameTextView.text = "${routerInfo.name} (ID ${routerInfo.id}"
+            nameTextView.text = "${routerInfo.name} (id ${routerInfo.id})"
             coordsTextView.text = "Coords: ${routerInfo.latitude}, ${routerInfo.longitude}"
             bssidTextView.text = "BSSID: ${routerInfo.bssid}"
         }

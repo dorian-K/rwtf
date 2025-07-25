@@ -86,4 +86,6 @@ dependencies {
     val retrofit_version = "2.9.0"
     implementation("com.squareup.retrofit2:retrofit:$retrofit_version")
     implementation("com.squareup.retrofit2:converter-gson:$retrofit_version") // Or another converter
+    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+
 }
