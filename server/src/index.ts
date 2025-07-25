@@ -8,6 +8,8 @@ import { rateLimit } from "express-rate-limit";
 import makeInterpLine, { GymDataWeek } from "./gym_math.js";
 import 'dotenv/config'
 import { parse } from "date-fns";
+import {h64} from "xxhashjs";
+import stringify from "json-stable-stringify";
 
 const app = express();
 app.set("trust proxy", ["loopback", "linklocal", "uniquelocal"]);
@@ -269,6 +271,11 @@ app.post("/api/v1/wifiap", limiterPost, express.json({limit: "500kb"}), async (r
     }
 });
 
+function hashObj(obj: any): string {
+    const canonical = stringify(obj)!;
+    return h64(canonical, 0xCAFEBABE).toString(16); // seed is arbitrary
+}
+
 app.post("/api/v1/upload", limiterPost, express.json({limit: "1000kb"}), async (req, res) => {
     const data = req.body;
 
@@ -299,10 +306,13 @@ app.post("/api/v1/upload", limiterPost, express.json({limit: "1000kb"}), async (
                     res.status(400).send('{"ok": false, "msg": "Invalid data"}');
                     return;
                 }
+                // hash the row
+                const hash = hashObj(row);
                 // insert into wifi_data_aplocations
                 await conn.query(
-                    `INSERT INTO wifi_data_aplocations (uploader_id, apname, latitude, longitude, raw) VALUES (?, ?, ?, ?, ?)`,
-                    [deviceId, row.name, row.latitude, row.longitude, JSON.stringify(row)]
+                    `INSERT INTO wifi_data_aplocations (uploader_id, apname, latitude, longitude, raw, hash) VALUES (?, ?, ?, ?, ?, ?)
+                    ON DUPLICATE KEY UPDATE hash=hash`,
+                    [deviceId, row.name, row.latitude, row.longitude, JSON.stringify(row), hash]
                 );
             }
             await conn.commit();
@@ -386,6 +396,7 @@ const database_init = async () => {
                 apname VARCHAR(255) NOT NULL,
                 latitude DECIMAL(10, 7) NOT NULL,
                 longitude DECIMAL(10, 7) NOT NULL,
+                hash VARCHAR(64) NOT NULL UNIQUE,
                 raw JSON NOT NULL
             )`
         );
