@@ -13,7 +13,6 @@ assert server_url, "SERVER_URL must be set in .env"
 
 
 def grab_data(url):
-
     # Fetch the page content
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"
@@ -107,9 +106,9 @@ table_data = []
 for data in all_data:
     if data["Name"] not in seen_aps:
         vals = []
-        assert len(data) == len(header) and all(
-            key in header for key in data
-        ), f"Data {data} does not match header {header}"
+        assert len(data) == len(header) and all(key in header for key in data), (
+            f"Data {data} does not match header {header}"
+        )
         for key in header:
             vals.append(data[key])
         table_data.append(vals)
@@ -121,7 +120,7 @@ send_data = {
     "data": table_data,
 }
 
-print(seen_aps)
+print(f"Seen APs: {len(seen_aps)}")
 # print(send_data)
 json_data = json.dumps(send_data)
 

@@ -224,6 +224,7 @@ app.post("/api/v1/wifiap", limiterPost, express.json({limit: "500kb"}), async (r
         let keys = data.header;
         conn = await getConnection();
         await conn.beginTransaction();
+        let numAdded = 0;
         try {
             for (const rowWithoutKeys of data.data) {
                 let row: any = {};
@@ -253,13 +254,16 @@ app.post("/api/v1/wifiap", limiterPost, express.json({limit: "500kb"}), async (r
                         parse(row["Zuletzt als online geprüft"], "dd.MM.yyyy HH:mm", new Date()),
                         ]
                     );
+                    numAdded++;
                 }
                 // insert into wifi_data
                
             }
             await conn.commit();
+            console.log(`Added ${numAdded} wifi AP entries from uploader ${req.ip}`);
         } catch (err) {
             await conn.rollback();
+            console.error(err);
             throw err;
         }
         res.json({ status: "ok" });
