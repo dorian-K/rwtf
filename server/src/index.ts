@@ -5,8 +5,8 @@ import { PoolConnection } from "mariadb";
 import { SAMPLE } from "./sample_data.js";
 import { downloadStreamFile, isAachener } from "./study.js";
 import { rateLimit } from "express-rate-limit";
-import makeInterpLine, { GymDataWeek } from "./gym_math.js";
-import 'dotenv/config'
+import { GymDataWeek, makeAverageLine, makeClosestLine } from "./gym_math.js";
+import "dotenv/config";
 import { parse } from "date-fns";
 import XXH from "xxhashjs";
 import stringify from "json-stable-stringify";
@@ -131,8 +131,10 @@ app.get("/api/v1/gym_interpline", async (req, res) => {
         let response: any;
 
         let weeks: GymDataWeek[] = [];
+
+        // old `makeAverageLine` used 12 weeks of data and did not include current week
         const NUM_WEEKS = 4 * 3; // 3 months
-        for (let i = 1; i <= NUM_WEEKS; i++) {
+        for (let i = 0; i <= NUM_WEEKS; i++) {
             const startDate = new Date();
             startDate.setDate(startDate.getDate() - i * 7 + dayoffset);
             startDate.setHours(6, 0, 0, 0);
@@ -157,7 +159,8 @@ app.get("/api/v1/gym_interpline", async (req, res) => {
                 weight: i <= 4 ? 5 : 1,
             });
         }
-        const interpLine = makeInterpLine(weeks);
+        //const interpLine = makeAverageLine(weeks);
+        const interpLine = makeClosestLine(weeks.slice(1), weeks[0].data);
 
         // calculate all time high
         let allTimeHigh = await conn.query(
@@ -173,7 +176,7 @@ app.get("/api/v1/gym_interpline", async (req, res) => {
         let queryMs = endTime.getTime() - startTime.getTime();
 
         // caching
-        res.setHeader("Cache-Control", "public, max-age=" + 60 * 120); // 120 minutes
+        res.setHeader("Cache-Control", "public, max-age=" + 60 * 10); // 10 minutes
         res.setHeader("Server-Timing", `db;dur=${queryMs}`);
         res.json({
             interpLine: interpLine,
@@ -193,10 +196,10 @@ const limiterPost = rateLimit({
     standardHeaders: true,
     legacyHeaders: false,
 });
-if(!process.env.WIFIAP_TOKEN){
+if (!process.env.WIFIAP_TOKEN) {
     console.error("WIFIAP_TOKEN not set!");
 }
-app.post("/api/v1/wifiap", limiterPost, express.json({limit: "500kb"}), async (req, res) => {
+app.post("/api/v1/wifiap", limiterPost, express.json({ limit: "500kb" }), async (req, res) => {
     const data = req.body;
     if (!data || !data.data || !data.version || !data.header) {
         res.status(400).send('{error: true, msg: "Invalid body"}');
@@ -208,7 +211,7 @@ app.post("/api/v1/wifiap", limiterPost, express.json({limit: "500kb"}), async (r
     }
 
     // maybe our wifiap token is not set correctly
-    if(!process.env.WIFIAP_TOKEN) {
+    if (!process.env.WIFIAP_TOKEN) {
         res.status(500).send('{error: true, msg: "Server not correctly configured"}');
         return;
     }
@@ -239,25 +242,30 @@ app.post("/api/v1/wifiap", limiterPost, express.json({limit: "500kb"}), async (r
                 );
 
                 // check if the numbers are parseable ints
-                if (isNaN(parseInt(row["Nutzer 2.4 GHz"])) || isNaN(parseInt(row["Nutzer 5 GHz"]))) {
+                if (
+                    isNaN(parseInt(row["Nutzer 2.4 GHz"])) ||
+                    isNaN(parseInt(row["Nutzer 5 GHz"]))
+                ) {
                     console.error("Invalid data for wifiap", row);
-
-                }else{
-                     await conn.query(
+                } else {
+                    await conn.query(
                         `INSERT INTO wifi_data (apname, users_2_4_ghz, users_5_ghz, online, last_online) VALUES (?, ?, ?, ?, ?)
                         ON DUPLICATE KEY UPDATE apname=apname`,
                         [
-                        row["Name"],
-                        row["Nutzer 2.4 GHz"],
-                        row["Nutzer 5 GHz"],
-                        row["Online"] ? 1 : 0,
-                        parse(row["Zuletzt als online geprüft"], "dd.MM.yyyy HH:mm", new Date()),
+                            row["Name"],
+                            row["Nutzer 2.4 GHz"],
+                            row["Nutzer 5 GHz"],
+                            row["Online"] ? 1 : 0,
+                            parse(
+                                row["Zuletzt als online geprüft"],
+                                "dd.MM.yyyy HH:mm",
+                                new Date()
+                            ),
                         ]
                     );
                     numAdded++;
                 }
                 // insert into wifi_data
-               
             }
             await conn.commit();
             console.log(`Added ${numAdded} wifi AP entries from uploader ${req.ip}`);
@@ -277,13 +285,13 @@ app.post("/api/v1/wifiap", limiterPost, express.json({limit: "500kb"}), async (r
 
 function hashObj(obj: any): string {
     const canonical = stringify(obj)!;
-    return XXH.h64(canonical, 0xCAFEBABE).toString(16); // seed is arbitrary
+    return XXH.h64(canonical, 0xcafebabe).toString(16); // seed is arbitrary
 }
 
-app.post("/api/v1/upload", limiterPost, express.json({limit: "1000kb"}), async (req, res) => {
+app.post("/api/v1/upload", limiterPost, express.json({ limit: "1000kb" }), async (req, res) => {
     const data = req.body;
 
-    if (!data || !data.deviceId || !data.version || data.version !==1 || !data.data) {
+    if (!data || !data.deviceId || !data.version || data.version !== 1 || !data.data) {
         res.status(400).send('{"ok": false, "msg": "Invalid body"}');
         return;
     }
@@ -295,7 +303,7 @@ app.post("/api/v1/upload", limiterPost, express.json({limit: "1000kb"}), async (
         res.status(400).send('{"ok": false, "msg":  "Invalid data"}');
         return;
     }
-    if(deviceId.length > 254 || deviceId.length < 1) {
+    if (deviceId.length > 254 || deviceId.length < 1) {
         res.status(400).send('{"ok": false, "msg":  "Device ID too long"}');
         return;
     }
@@ -404,7 +412,9 @@ const database_init = async () => {
                 raw JSON NOT NULL
             )`
         );
-        await conn.query("CREATE INDEX IF NOT EXISTS idx_loc_apname ON wifi_data_aplocations (apname)");
+        await conn.query(
+            "CREATE INDEX IF NOT EXISTS idx_loc_apname ON wifi_data_aplocations (apname)"
+        );
 
         await conn.query(
             "CREATE TABLE IF NOT EXISTS rwth_gym (id INT AUTO_INCREMENT PRIMARY KEY, auslastung INT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
