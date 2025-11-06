@@ -133,7 +133,7 @@ app.get("/api/v1/gym_interpline", async (req, res) => {
         let weeks: GymDataWeek[] = [];
 
         // old `makeAverageLine` used 12 weeks of data and did not include current week
-        const NUM_WEEKS = 4 * 3; // 3 months
+        const NUM_WEEKS = 60; // 1 year and a bit
         for (let i = 0; i <= NUM_WEEKS; i++) {
             const startDate = new Date();
             startDate.setDate(startDate.getDate() - i * 7 + dayoffset);
