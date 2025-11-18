@@ -12,6 +12,7 @@ services:
       server:
         restart: true
         required: true
+        condition: service_started
 
   server:
     build: server
@@ -21,6 +22,7 @@ services:
       mariadb:
         restart: true
         required: true
+        condition: service_started
     environment:
       - TZ=Europe/Berlin
     volumes:
