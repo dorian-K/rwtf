@@ -9,14 +9,18 @@ services:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf
       - screenshot-data:/screenshot
     depends_on:
-      - server
+      server:
+        restart: true
+        required: true
 
   server:
     build: server
     init: true
     restart: unless-stopped
     depends_on:
-      - mariadb
+      mariadb:
+        restart: true
+        required: true
     environment:
       - TZ=Europe/Berlin
     volumes:
