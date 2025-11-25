@@ -83,6 +83,7 @@ function makeAverageLine(gym_hist: GymDataWeek[]) {
 }
 
 // First find the three most similar weeks to the current week, then average those
+// We also try to align all the weeks to the current one by scaling it appropriately
 function makeClosestLine(gym_hist: GymDataWeek[], data_of_current_day: GymDataPiece[]) {
     const MINIMUM_COMPARE_POINTS = 6;
     if (data_of_current_day.length < MINIMUM_COMPARE_POINTS || gym_hist.length <= 3) {
@@ -95,7 +96,8 @@ function makeClosestLine(gym_hist: GymDataWeek[], data_of_current_day: GymDataPi
         let points_compared = 0;
         let lastHistIndex = 0;
 
-        if (week.data.length < 2 || data_of_current_day.length < 1) {
+        if (week.data.length < MINIMUM_COMPARE_POINTS || data_of_current_day.length < 1) {
+            // dont use the week if it has too little data
             return { week: week, distance: Infinity };
         }
 
@@ -134,6 +136,7 @@ function makeClosestLine(gym_hist: GymDataWeek[], data_of_current_day: GymDataPi
 
         // for every data point in the current day, we find the corresponding value in the historical week
         // by using linear interpolation. Then we calculate the squared error.
+        let interpolatedVals = [];
         for (const currentPoint of normalized_current_day) {
             const time = currentPoint.created_at;
             let interpolatedValue = null;
@@ -155,15 +158,39 @@ function makeClosestLine(gym_hist: GymDataWeek[], data_of_current_day: GymDataPi
                 }
             }
 
-            if (interpolatedValue !== null) {
-                const error = currentPoint.auslastung - interpolatedValue;
-                total_error += error * error;
-                points_compared++;
+            interpolatedVals.push(interpolatedValue);
+        }
+        // we have a list of interpolated values that align with our current day
+        // now we do least squares regression with y = mx to align it as closely as possible to the current day
+        let sumXY = 0;
+        let sumXX = 0;
+        for (let i = 0; i < normalized_current_day.length; i++) {
+            const y = normalized_current_day[i].auslastung;
+            const x = interpolatedVals[i];
+            if (x !== null) {
+                sumXY += x * y;
+                sumXX += x * x;
             }
         }
 
-        const mse =
-            points_compared >= MINIMUM_COMPARE_POINTS ? total_error / points_compared : Infinity;
+        const m = sumXX > 0 ? sumXY / sumXX : 1;
+
+        // now calculate the total squared error with the found m
+        for (let i = 0; i < normalized_current_day.length; i++) {
+            const y = normalized_current_day[i].auslastung;
+            const x = interpolatedVals[i];
+            if (x !== null) {
+                const predictedY = m * x;
+                const error = y - predictedY;
+                total_error += error * error;
+                points_compared++;
+            }
+        }       
+
+        let mse = Infinity;
+        if (points_compared >= MINIMUM_COMPARE_POINTS && points_compared >= normalized_current_day.length / 2) {
+            mse = total_error / points_compared; // only consider weeks that have enough points compared
+        }
         return { week: week, distance: mse };
     });
 
