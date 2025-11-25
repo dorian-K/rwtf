@@ -191,7 +191,17 @@ function makeClosestLine(gym_hist: GymDataWeek[], data_of_current_day: GymDataPi
         if (points_compared >= MINIMUM_COMPARE_POINTS && points_compared >= normalized_current_day.length / 2) {
             mse = total_error / points_compared; // only consider weeks that have enough points compared
         }
-        return { week: week, distance: mse };
+
+        // of course we also need to adjust the week data with the found m
+        let adjustedWeek: GymDataWeek = {
+            data: week.data.map((d) => ({
+                ...d,
+                auslastung: d.auslastung * m,
+            })),
+            weight: week.weight,
+        };
+
+        return { week: adjustedWeek, distance: mse };
     });
 
     // sort the weeks by distance and take the three best ones
