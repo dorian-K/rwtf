@@ -165,7 +165,7 @@ export async function isAachener(req: Request, res: Response) {
         "10.0.0.0/8",
         "172.16.0.0/12",
         "::1/128",
-        "62.155.192.0/20" // Joerg's home IP
+        "89.0.0.0/15", // joergs ip, https://ipinfo.io/AS8422
     ];
     const ip = req.ip;
     if (!ip) {
