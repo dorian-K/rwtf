@@ -295,7 +295,7 @@ function CopyStation({ str }: { str: string }) {
 
     return (
         <div className="input-group my-2">
-            <input type="text" className="form-control" value={str} onClick={copy} ref={inputRef} />
+            <input type="text" className="form-control" value={str} onClick={copy} ref={inputRef} readOnly />
             <button className="btn btn-outline-secondary" type="button" onClick={copy}>
                 Copy
             </button>
