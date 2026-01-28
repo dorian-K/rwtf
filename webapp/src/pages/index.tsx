@@ -37,8 +37,8 @@ function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineR
     }));
     data = data.sort((a, b) => a.created_at - b.created_at);
 
-    gym.data_historic = gym.data_historic || [];
-    let historicData = gym.data_historic.map((week, index) =>
+    let data_historic = gym.data_historic || [];
+    let historicData = data_historic.map((week, index) =>
         week
             .map((g) => ({
                 ...g,
@@ -295,7 +295,14 @@ function CopyStation({ str }: { str: string }) {
 
     return (
         <div className="input-group my-2">
-            <input type="text" className="form-control" value={str} onClick={copy} ref={inputRef} readOnly />
+            <input
+                type="text"
+                className="form-control"
+                value={str}
+                onClick={copy}
+                ref={inputRef}
+                readOnly
+            />
             <button className="btn btn-outline-secondary" type="button" onClick={copy}>
                 Copy
             </button>

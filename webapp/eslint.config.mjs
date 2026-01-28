@@ -10,17 +10,22 @@ const __dirname = path.dirname(__filename);
 const compat = new FlatCompat({
     baseDirectory: __dirname,
     recommendedConfig: js.configs.recommended,
-    allConfig: js.configs.all
+    allConfig: js.configs.all,
 });
 
-export default defineConfig([{
-    extends: [...nextCoreWebVitals, ...compat.extends("plugin:prettier/recommended")],
+export default defineConfig([
+    {
+        extends: [...nextCoreWebVitals, ...compat.extends("plugin:prettier/recommended")],
 
-    rules: {
-        "react/no-unescaped-entities": ["error", {
-            forbid: [">", "'", "}"],
-        }],
+        rules: {
+            "react/no-unescaped-entities": [
+                "error",
+                {
+                    forbid: [">", "'", "}"],
+                },
+            ],
 
-        "@next/next/no-img-element": "off",
+            "@next/next/no-img-element": "off",
+        },
     },
-}]);
+]);
