@@ -53,7 +53,7 @@ function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineR
     const options: ApexOptions = {
         yaxis: {
             min: 0,
-            max: (max) => Math.max(160, Math.ceil(max / 10) * 10),
+            max: (max) => Math.max(180, Math.ceil(max / 10) * 10),
             decimalsInFloat: 0,
             tickAmount: 6,
         },
@@ -105,6 +105,20 @@ function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineR
             opacity: [0.4, 0.15, 0.15].concat(new Array(historicData.length).fill(0.02)),
         },
         annotations: {
+            yaxis: [
+                {
+                    y: 160,
+                    y2: 1000,
+                    fillColor: '#FF0000',
+                    opacity: 0.15,
+                },
+                {
+                    y: 120,
+                    y2: 160,
+                    fillColor: '#ff8c00',
+                    opacity: 0.15,
+                },
+            ],
             texts: [
                 {
                     x: 200,
@@ -407,7 +421,7 @@ function StudyStuff() {
         return <>Access more from within the RWTH network!</>;
     }
 
-    const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    const onSubmit = (e: React.SubmitEvent<HTMLFormElement>) => {
         e.preventDefault();
         const url = (e.currentTarget.querySelector("#studyUrl") as HTMLInputElement).value;
         window.open(api.getStudyUrl(url), "_blank");
