@@ -44,9 +44,9 @@ setInterval(() => {
 }, 1000 * 60 * 60);
 
 class UserError extends Error {
-  constructor(message: string) {
-    super(message)
-  }
+    constructor(message: string) {
+        super(message)
+    }
 }
 
 async function downloadStudyFunky(origUrl: string) {
@@ -178,40 +178,45 @@ export async function isAachener(req: Request, res: Response) {
             return false;
         }
         if (!valid_ip_ranges.some((range) => ipRangeCheck(ip, range))) {
-            const resp = await fetch(`https://ipapi.co/${ip}/json/`, {
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:141.0) Gecko/20100101 Firefox/141.0'
-                }
-            });
-            const js: any = await resp.json();
-            //console.log(js);
-            if (js.error) {
+            try {
+                const resp = await fetch(`https://ipapi.co/${ip}/json/`, {
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:141.0) Gecko/20100101 Firefox/141.0'
+                    }
+                });
+                const js: any = await resp.json();
                 //console.log(js);
-                //res.status(403).send({ error: true, msg: "Invalid IP" });
-                return false;
-            }
-            if (js.city !== "Aachen") {
-                console.log("Invalid city", js.city, "for IP", ip);
-                //res.status(403).send({ error: true, msg: "Invalid IP" });
-                // add to invalid list
-                invalid_ip_ranges.push(js.network);
-                if (invalid_ip_ranges.length > 1000) {
-                    invalid_ip_ranges.shift();
+                if (js.error) {
+                    //console.log(js);
+                    //res.status(403).send({ error: true, msg: "Invalid IP" });
+                    return false;
                 }
+                if (js.city !== "Aachen") {
+                    console.log("Invalid city", js.city, "for IP", ip);
+                    //res.status(403).send({ error: true, msg: "Invalid IP" });
+                    // add to invalid list
+                    invalid_ip_ranges.push(js.network);
+                    if (invalid_ip_ranges.length > 1000) {
+                        invalid_ip_ranges.shift();
+                    }
+                    return false;
+                }
+                // add to valid list
+                if (js.version === "IPv6") {
+                    valid_ip_ranges.push(js.network);
+                } else {
+                    valid_ip_ranges.push(js.network);
+                }
+
+                if (valid_ip_ranges.length > 1000) {
+                    valid_ip_ranges.shift();
+                }
+
+                console.log("Valid IP", ip);
+            } catch (err) {
+                console.error("Failed to validate IP", ip, err);
                 return false;
             }
-            // add to valid list
-            if (js.version === "IPv6") {
-                valid_ip_ranges.push(js.network);
-            } else {
-                valid_ip_ranges.push(js.network);
-            }
-
-            if (valid_ip_ranges.length > 1000) {
-                valid_ip_ranges.shift();
-            }
-
-            console.log("Valid IP", ip);
         } else {
             //console.log("Loaded from cache");
         }
