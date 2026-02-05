@@ -188,7 +188,7 @@ function makeClosestLine(gym_hist: GymDataWeek[], data_of_current_day: GymDataPi
         }       
 
         let mse = Infinity;
-        if (points_compared >= MINIMUM_COMPARE_POINTS && points_compared >= normalized_current_day.length / 2) {
+        if (points_compared >= MINIMUM_COMPARE_POINTS && points_compared >= normalized_current_day.length * 0.8 - 1) {
             mse = total_error / points_compared; // only consider weeks that have enough points compared
         }
         mse /= week.weight; // adjust by weight to prefer more reliable weeks
@@ -207,7 +207,7 @@ function makeClosestLine(gym_hist: GymDataWeek[], data_of_current_day: GymDataPi
 
     // sort the weeks by distance and take the three best ones
     const sortedWeeks = distances.sort((a, b) => a.distance - b.distance);
-    const closestWeeks = sortedWeeks.slice(0, 3).map((d) => ({
+    const closestWeeks = sortedWeeks.slice(0, 5).map((d) => ({
         ...d.week,
         weight: 1, // give them equal weight
     }));
@@ -216,7 +216,7 @@ function makeClosestLine(gym_hist: GymDataWeek[], data_of_current_day: GymDataPi
         return [];
     }
 
-    // average the three best weeks
+    // average the five best weeks
     return makeAverageLine(closestWeeks);
 }
 
