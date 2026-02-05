@@ -191,6 +191,7 @@ function makeClosestLine(gym_hist: GymDataWeek[], data_of_current_day: GymDataPi
         if (points_compared >= MINIMUM_COMPARE_POINTS && points_compared >= normalized_current_day.length / 2) {
             mse = total_error / points_compared; // only consider weeks that have enough points compared
         }
+        mse /= week.weight; // adjust by weight to prefer more reliable weeks
 
         // of course we also need to adjust the week data with the found m
         let adjustedWeek: GymDataWeek = {

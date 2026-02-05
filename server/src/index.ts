@@ -156,7 +156,7 @@ app.get("/api/v1/gym_interpline", async (req, res) => {
             });
             weeks.push({
                 data: sanitized,
-                weight: i <= 4 ? 5 : 1,
+                weight: i <= 4 ? 3 : 1, // prefer recent weeks more heavily
             });
         }
         //const interpLine = makeAverageLine(weeks);
