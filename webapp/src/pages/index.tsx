@@ -109,13 +109,13 @@ function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineR
                 {
                     y: 160,
                     y2: 1000,
-                    fillColor: '#FF0000',
+                    fillColor: "#FF0000",
                     opacity: 0.15,
                 },
                 {
                     y: 120,
                     y2: 160,
-                    fillColor: '#ff8c00',
+                    fillColor: "#ff8c00",
                     opacity: 0.15,
                 },
             ],
@@ -172,7 +172,7 @@ function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineR
             })),
         },
         {
-            name: "Historic Avg",
+            name: "Prediction",
             data: gymLine.interpLine.map((g) => {
                 const gDate = new Date(g.created_at);
                 return {
@@ -358,11 +358,13 @@ function GymStuff() {
                             </dt>
                             <dd>Number of people in the gym as reported by HSZ.</dd>
                             <dt>
-                                <strong>Historic Avg</strong>:
+                                <strong>Prediction</strong>:
                             </dt>
                             <dd>
-                                Average utilization on this day of the week over the last couple of
-                                weeks/months.
+                                Prediction of the number of people in the gym for the remainder of
+                                the day, the day, the day, based on historical data and the current
+                                trend. prediction for the current day becomes more accurate as the
+                                day progresses and more data points are available.
                             </dd>
                             <dt>
                                 <strong>Historic Arrival</strong>:
