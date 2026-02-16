@@ -343,7 +343,7 @@ app.post("/api/v1/upload", limiterPost, express.json({ limit: "1000kb" }), async
 
 const limiterdoc1 = rateLimit({
     windowMs: 1 * 60 * 1000, // 10 reqs / 1 minute
-    limit: 10,
+    limit: 20,
     standardHeaders: true,
     legacyHeaders: false,
 });
