@@ -173,7 +173,9 @@ function makeClosestLine(gym_hist: GymDataWeek[], data_of_current_day: GymDataPi
             }
         }
 
-        const m = sumXX > 0 ? sumXY / sumXX : 1;
+        let m = sumXX > 0 ? sumXY / sumXX : 1;
+        m = Math.min(m, 1.25);
+        m = Math.max(m, 0.5);
 
         // now calculate the total squared error with the found m
         for (let i = 0; i < normalized_current_day.length; i++) {
