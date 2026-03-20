@@ -1,6 +1,6 @@
 # Dev setup:
 
-Install docker and nodejs
+Install Docker and Node.js.
 
 Run in two shells:
 
