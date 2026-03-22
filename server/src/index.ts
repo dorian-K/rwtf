@@ -375,7 +375,8 @@ const limiterExport = rateLimit({
 app.get("/api/v1/gym/export", limiterExport, async (req, res) => {
     const startDateStr = req.query.start_date as string;
     const endDateStr = req.query.end_date as string;
-    const format = (req.query.format as string) || "csv";
+    const formatParam = (req.query.format as string) || "csv";
+    const format = formatParam === "json" ? "json" : "csv"; // Default to CSV, only allow csv or json
 
     if (!startDateStr || !endDateStr) {
         res.status(400).json({ error: true, msg: "start_date and end_date are required" });
