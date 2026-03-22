@@ -326,18 +326,17 @@ function CopyStation({ str }: { str: string }) {
 
 function DataExportForm() {
     const today = new Date();
-    const formatDate = (d: Date) => d.toISOString().split("T")[0];
+    const formatDate = (d: Date) => {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+    };
 
     const getLastYear = () => {
         const d = new Date(today);
         d.setFullYear(d.getFullYear() - 1);
         return d;
-    };
-
-    const getAllDataStart = () => {
-        // Return a date early enough to cover all historical data
-        // RWTF project started around 2024, so 2020 is safe
-        return new Date("2020-01-01");
     };
 
     const [startDate, setStartDate] = useState<string>(formatDate(getLastYear()));
@@ -350,18 +349,19 @@ function DataExportForm() {
         const start = new Date();
         if (preset === "lastYear") {
             start.setFullYear(start.getFullYear() - 1);
-        } else { // allData
+        } else {
+            // allData
             start.setFullYear(2020, 0, 1); // Jan 1, 2020
         }
         setStartDate(formatDate(start));
         setEndDate(formatDate(end));
     };
 
-        const handleExport = () => {
+    const handleExport = () => {
         setError(null);
         const start = new Date(startDate);
         const end = new Date(endDate);
-        const diffDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+        const diffDays = Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
         // Backend limit: 2000 days (~5.5 years)
         if (diffDays > 2000) {
@@ -441,6 +441,7 @@ function GymStuff() {
     const [picUrl, setPicUrl] = useState<string>("https://rwtf.dorianko.ch/embed_picture.png");
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setEmbedCode(EMBED_CODE(window.location.origin));
         setPicUrl(`${window.location.origin}/embed_picture.png`);
     }, []);

@@ -426,7 +426,7 @@ app.get("/api/v1/gym/export", limiterExport, async (req, res) => {
             res.setHeader("Content-Disposition", `attachment; filename="gym_data_${startDateStr}_${endDateStr}.json"`);
             res.json({
                 data: rows.map((r: any) => ({
-                    timestamp: r.created_at,
+                    timestamp: (r.created_at as Date).toISOString(),
                     utilization: r.auslastung,
                 })),
                 metadata: {
@@ -441,15 +441,13 @@ app.get("/api/v1/gym/export", limiterExport, async (req, res) => {
             // CSV format
             res.setHeader("Content-Type", "text/csv");
             res.setHeader("Content-Disposition", `attachment; filename="gym_data_${startDateStr}_${endDateStr}.csv"`);
+            res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+            res.setHeader("Pragma", "no-cache");
 
             // Build CSV content
             let csv = "timestamp,utilization\n";
             for (const row of rows) {
-                csv += `${row.created_at},${row.auslastung}\n`;
-            }
-
-            if (truncated) {
-                csv += `\n# Note: Data truncated. ${totalCount} total samples available, showing first ${MAX_ROWS}.\n`;
+                csv += `${(row.created_at as Date).toISOString()},${row.auslastung}\n`;
             }
 
             res.send(csv);
