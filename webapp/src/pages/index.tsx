@@ -382,7 +382,7 @@ function GymStuff() {
                         </dl>
                     </small>
                     <small>
-                        This Website is <a href="https://github.com/dorian-K/rwtf">open-source</a>!
+                        This Website is <a href="https://github.com/dorian-K/rwtf">open-source</a>! | <a href="/trends">View Historical Trends</a>
                     </small>
                     <hr />
                     <h4>Embed</h4>
