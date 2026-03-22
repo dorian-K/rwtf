@@ -160,9 +160,12 @@ app.get("/api/v1/gym_interpline", async (req, res) => {
             });
         }
         // Calculate prediction line based on selected method
-        const method = (req.query.method as string) || "closest";
+        const methodParam = (req.query.method as string) || "closest";
+        const validMethods = ["closest", "average", "median", "dayofweek"];
+        const method = validMethods.includes(methodParam) ? methodParam : "closest";
         let interpLine;
-        const currentDayOfWeek = new Date().getDay();
+        const targetDate = new Date(Date.now() + dayoffset * 24 * 3600000);
+        const currentDayOfWeek = targetDate.getDay();
         
         switch (method) {
             case "average":
@@ -179,7 +182,7 @@ app.get("/api/v1/gym_interpline", async (req, res) => {
                 break;
             case "closest":
             default:
-                // Find most similar weeks and average them (default)
+                // Find most similar weeks to current week (excluding current week itself) and average them
                 interpLine = makeClosestLine(weeks.slice(1), weeks[0].data);
         }
 
