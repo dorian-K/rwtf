@@ -64,6 +64,23 @@ function LiveStatusCard({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterp
     };
     const bestTime = getBestTime();
 
+    // For people already at the gym: "How long until it gets crowded?"
+    const getStayDuration = () => {
+        if (currentUtil === null || !gymLine?.interpLine || currentUtil > 70) return null;
+        const now = new Date();
+        // Find when it hits 70% (uncomfortable)
+        for (const p of gymLine.interpLine) {
+            const ptTime = new Date(p.created_at);
+            if (ptTime > now && p.auslastung >= 70) {
+                const minsUntil = Math.round((ptTime.getTime() - now.getTime()) / 60000);
+                return { until: ptTime, mins: minsUntil, value: p.auslastung };
+            }
+        }
+        // Doesn't hit 70% in prediction window
+        return { until: null, mins: 180, value: null };
+    };
+    const stayDuration = getStayDuration();
+
     const getStatusColor = (util: number) => {
         if (util < 40) return "text-success";
         if (util < 65) return "text-warning";
@@ -100,6 +117,19 @@ function LiveStatusCard({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterp
                         <small className="text-success">
                             💡 Best time: {bestTime.time.getHours()}:00 ({bestTime.value.toFixed(0)}%)
                         </small>
+                    </div>
+                )}
+                {stayDuration && currentUtil !== null && currentUtil < 70 && (
+                    <div className="mt-2 pt-2 border-top border-secondary text-center">
+                        {stayDuration.until ? (
+                            <small className="text-info">
+                                ⏱️ You have ~{stayDuration.mins} min until crowded ({stayDuration.value.toFixed(0)}%)
+                            </small>
+                        ) : (
+                            <small className="text-success">
+                                ⏱️ Gym stays comfortable for ~3h
+                            </small>
+                        )}
                     </div>
                 )}
             </div>
