@@ -42,8 +42,13 @@ export class Backend {
         return this.processResponse(this.fetch("/api/v1/gym?dayoffset=" + dayoffset));
     }
 
-    getGymInterpLine(dayoffset: number, method: PredictionMethod = "closest"): Promise<GymInterpLineResponse> {
-        return this.processResponse(this.fetch("/api/v1/gym_interpline?dayoffset=" + dayoffset + "&method=" + method));
+    getGymInterpLine(
+        dayoffset: number,
+        method: PredictionMethod = "closest",
+    ): Promise<GymInterpLineResponse> {
+        return this.processResponse(
+            this.fetch("/api/v1/gym_interpline?dayoffset=" + dayoffset + "&method=" + method),
+        );
     }
 
     isAachener(): Promise<boolean> {

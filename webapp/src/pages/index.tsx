@@ -8,8 +8,13 @@ import { EMBED_CODE } from "./embed_gym";
 const ReactApexChart = React.lazy(() => import("react-apexcharts"));
 
 function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineResponse }) {
-    const methodName = gymLine.method ? 
-        { closest: "Similar Weeks", average: "Simple Average", median: "Robust Average", dayofweek: "Same Weekday" }[gymLine.method] || "Prediction"
+    const methodName = gymLine.method
+        ? {
+              closest: "Similar Weeks",
+              average: "Simple Average",
+              median: "Robust Average",
+              dayofweek: "Same Weekday",
+          }[gymLine.method] || "Prediction"
         : "Prediction";
     let todayReference;
     if (gym.data_today.length > 0) {
@@ -298,13 +303,15 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
                         ))}
                     </div>
                     <div className="input-group" style={{ maxWidth: "250px" }}>
-                        <label className="input-group-text" htmlFor="methodSelect">Prediction:</label>
+                        <label className="input-group-text" htmlFor="methodSelect">
+                            Prediction:
+                        </label>
                         <select
                             className="form-select"
                             id="methodSelect"
                             value={method}
                             onChange={(e) => setMethod(e.target.value as PredictionMethod)}
-                            title={methods.find(m => m.value === method)?.desc}
+                            title={methods.find((m) => m.value === method)?.desc}
                         >
                             {methods.map((m) => (
                                 <option key={m.value} value={m.value} title={m.desc}>
@@ -355,6 +362,7 @@ function GymStuff() {
     const [picUrl, setPicUrl] = useState<string>("https://rwtf.dorianko.ch/embed_picture.png");
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setEmbedCode(EMBED_CODE(window.location.origin));
         setPicUrl(`${window.location.origin}/embed_picture.png`);
     }, []);
@@ -387,7 +395,10 @@ function GymStuff() {
                                 <strong>Prediction</strong>:
                             </dt>
                             <dd>
-                                Prediction of the number of people in the gym for the remainder of the day, based on historical data and the current trend. Prediction for the current day becomes more accurate as the day progresses and more data points are available.
+                                Prediction of the number of people in the gym for the remainder of
+                                the day, based on historical data and the current trend. Prediction
+                                for the current day becomes more accurate as the day progresses and
+                                more data points are available.
                             </dd>
                             <dt>
                                 <strong>Historic Arrival</strong>:
