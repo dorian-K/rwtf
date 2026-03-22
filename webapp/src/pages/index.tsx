@@ -325,10 +325,33 @@ function CopyStation({ str }: { str: string }) {
 }
 
 function DataExportForm() {
-    const [startDate, setStartDate] = useState<string>("2026-01-01");
-    const [endDate, setEndDate] = useState<string>("2026-01-31");
+    const today = new Date();
+    const formatDate = (d: Date) => d.toISOString().split("T")[0];
+    
+    const getLast7Days = () => {
+        const d = new Date(today);
+        d.setDate(d.getDate() - 7);
+        return d;
+    };
+    
+    const getLast30Days = () => {
+        const d = new Date(today);
+        d.setDate(d.getDate() - 30);
+        return d;
+    };
+    
+    const [startDate, setStartDate] = useState<string>(formatDate(getLast30Days()));
+    const [endDate, setEndDate] = useState<string>(formatDate(today));
     const [format, setFormat] = useState<"csv" | "json">("csv");
     const [error, setError] = useState<string | null>(null);
+
+    const setPresetRange = (days: number) => {
+        const end = new Date();
+        const start = new Date();
+        start.setDate(start.getDate() - days);
+        setStartDate(formatDate(start));
+        setEndDate(formatDate(end));
+    };
 
     const handleExport = () => {
         setError(null);
@@ -351,6 +374,11 @@ function DataExportForm() {
 
     return (
         <div className="mt-2">
+            <div className="btn-group btn-group-sm mb-2" role="group">
+                <button type="button" className="btn btn-outline-secondary" onClick={() => setPresetRange(7)}>Last 7 days</button>
+                <button type="button" className="btn btn-outline-secondary" onClick={() => setPresetRange(14)}>Last 14 days</button>
+                <button type="button" className="btn btn-outline-secondary" onClick={() => setPresetRange(30)}>Last 30 days</button>
+            </div>
             <div className="row g-2 align-items-end">
                 <div className="col-auto">
                     <label className="form-label small mb-1">Start Date</label>
