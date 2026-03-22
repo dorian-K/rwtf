@@ -440,6 +440,28 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
                             </button>
                         ))}
                     </div>
+                    <div className="input-group" style={{ maxWidth: "180px", marginLeft: "8px" }}>
+                        <label className="input-group-text" htmlFor="predTime">Predict for:</label>
+                        <input
+                            type="time"
+                            className="form-control"
+                            id="predTime"
+                            value={predTime}
+                            onChange={(e) => setPredTime(e.target.value)}
+                        />
+                    </div>
+                    {predTime && (
+                        <div className="badge bg-info align-self-center" style={{ marginLeft: "8px" }}>
+                            {(() => {
+                                const pred = getPredictionForTime(predTime);
+                                if (pred.value !== null) {
+                                    const color = pred.value < 40 ? "success" : pred.value < 65 ? "warning" : "danger";
+                                    return <span className={`text-${color}`}>{pred.value.toFixed(0)}%</span>;
+                                }
+                                return "—";
+                            })()}
+                        </div>
+                    )}
                     {isLoading && <div className="spinner-border"></div>}
                 </div>
             )}
