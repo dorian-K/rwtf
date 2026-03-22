@@ -221,11 +221,11 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
 
     const days = ["Today", "Tomorrow", "+2 days", "+3 days"];
     const [dayoffset, setDayoffset] = useState(0);
-    const methods: { value: PredictionMethod; label: string }[] = [
-        { value: "closest", label: "Similar Weeks" },
-        { value: "average", label: "Simple Average" },
-        { value: "median", label: "Robust Average" },
-        { value: "dayofweek", label: "Same Weekday" },
+    const methods: { value: PredictionMethod; label: string; desc: string }[] = [
+        { value: "closest", label: "Similar Weeks", desc: "Finds weeks with similar patterns" },
+        { value: "average", label: "Simple Average", desc: "Average of all past weeks" },
+        { value: "median", label: "Robust Average", desc: "Ignores outliers" },
+        { value: "dayofweek", label: "Same Weekday", desc: "Only uses same day of week" },
     ];
     const [method, setMethod] = useState<PredictionMethod>("closest");
     const api = useBackendContext();
@@ -294,16 +294,17 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
                             </button>
                         ))}
                     </div>
-                    <div className="input-group" style={{ maxWidth: "200px" }}>
+                    <div className="input-group" style={{ maxWidth: "250px" }}>
                         <label className="input-group-text" htmlFor="methodSelect">Prediction:</label>
                         <select
                             className="form-select"
                             id="methodSelect"
                             value={method}
                             onChange={(e) => setMethod(e.target.value as PredictionMethod)}
+                            title={methods.find(m => m.value === method)?.desc}
                         >
                             {methods.map((m) => (
-                                <option key={m.value} value={m.value}>
+                                <option key={m.value} value={m.value} title={m.desc}>
                                     {m.label}
                                 </option>
                             ))}
