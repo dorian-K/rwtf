@@ -327,19 +327,19 @@ function CopyStation({ str }: { str: string }) {
 function DataExportForm() {
     const today = new Date();
     const formatDate = (d: Date) => d.toISOString().split("T")[0];
-    
+
     const getLast7Days = () => {
         const d = new Date(today);
         d.setDate(d.getDate() - 7);
         return d;
     };
-    
+
     const getLast30Days = () => {
         const d = new Date(today);
         d.setDate(d.getDate() - 30);
         return d;
     };
-    
+
     const [startDate, setStartDate] = useState<string>(formatDate(getLast30Days()));
     const [endDate, setEndDate] = useState<string>(formatDate(today));
     const [format, setFormat] = useState<"csv" | "json">("csv");
@@ -358,7 +358,7 @@ function DataExportForm() {
         const start = new Date(startDate);
         const end = new Date(endDate);
         const diffDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-        
+
         if (diffDays > 31) {
             setError("Date range cannot exceed 31 days");
             return;
@@ -367,7 +367,7 @@ function DataExportForm() {
             setError("End date must be after start date");
             return;
         }
-        
+
         const url = `/api/v1/gym/export?start_date=${startDate}&end_date=${endDate}&format=${format}`;
         window.open(url, "_blank");
     };
@@ -375,9 +375,27 @@ function DataExportForm() {
     return (
         <div className="mt-2">
             <div className="btn-group btn-group-sm mb-2" role="group">
-                <button type="button" className="btn btn-outline-secondary" onClick={() => setPresetRange(7)}>Last 7 days</button>
-                <button type="button" className="btn btn-outline-secondary" onClick={() => setPresetRange(14)}>Last 14 days</button>
-                <button type="button" className="btn btn-outline-secondary" onClick={() => setPresetRange(30)}>Last 30 days</button>
+                <button
+                    type="button"
+                    className="btn btn-outline-secondary"
+                    onClick={() => setPresetRange(7)}
+                >
+                    Last 7 days
+                </button>
+                <button
+                    type="button"
+                    className="btn btn-outline-secondary"
+                    onClick={() => setPresetRange(14)}
+                >
+                    Last 14 days
+                </button>
+                <button
+                    type="button"
+                    className="btn btn-outline-secondary"
+                    onClick={() => setPresetRange(30)}
+                >
+                    Last 30 days
+                </button>
             </div>
             <div className="row g-2 align-items-end">
                 <div className="col-auto">
@@ -410,10 +428,7 @@ function DataExportForm() {
                     </select>
                 </div>
                 <div className="col-auto">
-                    <button
-                        className="btn btn-sm btn-primary"
-                        onClick={handleExport}
-                    >
+                    <button className="btn btn-sm btn-primary" onClick={handleExport}>
                         Download
                     </button>
                 </div>
@@ -460,7 +475,10 @@ function GymStuff() {
                                 <strong>Prediction</strong>:
                             </dt>
                             <dd>
-                                Prediction of the number of people in the gym for the remainder of the day, based on historical data and the current trend. Prediction for the current day becomes more accurate as the day progresses and more data points are available.
+                                Prediction of the number of people in the gym for the remainder of
+                                the day, based on historical data and the current trend. Prediction
+                                for the current day becomes more accurate as the day progresses and
+                                more data points are available.
                             </dd>
                             <dt>
                                 <strong>Historic Arrival</strong>:
@@ -499,7 +517,9 @@ function GymStuff() {
                     <small>
                         Download gym utilization data for your own analysis.
                         <DataExportForm />
-                        <span className="text-muted small">Max 31 days per export. Last 5 exports limited per hour.</span>
+                        <span className="text-muted small">
+                            Max 31 days per export. Last 5 exports limited per hour.
+                        </span>
                     </small>
                 </div>
             </div>
