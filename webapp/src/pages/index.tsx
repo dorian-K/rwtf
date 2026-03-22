@@ -1,4 +1,4 @@
-import { GymInterpLineResponse, GymResponse } from "@/api/Backend";
+import { GymInterpLineResponse, GymResponse, PredictionMethod } from "@/api/Backend";
 import { useBackendContext } from "@/components/BackendProvider";
 import { ApexOptions } from "apexcharts";
 import React from "react";
@@ -221,11 +221,16 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
 
     const days = ["Today", "Tomorrow", "+2 days", "+3 days"];
     const [dayoffset, setDayoffset] = useState(0);
+    const methods: { value: PredictionMethod; label: string }[] = [
+        { value: "closest", label: "Similar Weeks" },
+        { value: "average", label: "Simple Average" },
+    ];
+    const [method, setMethod] = useState<PredictionMethod>("closest");
     const api = useBackendContext();
 
     const reloadData = () => {
         setIsLoading(true);
-        const prom = Promise.all([api.getGym(dayoffset), api.getGymInterpLine(dayoffset)]);
+        const prom = Promise.all([api.getGym(dayoffset), api.getGymInterpLine(dayoffset, method)]);
         prom.then((res) => {
             setGym(res[0]);
             setGymLine(res[1]);
@@ -255,7 +260,7 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
             clearInterval(tim);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [api, dayoffset]);
+    }, [api, dayoffset, method]);
 
     return (
         <>
@@ -265,7 +270,7 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
             </div>
 
             {hideHandles === false && (
-                <div className="d-flex mt-3 ">
+                <div className="d-flex mt-3 flex-wrap gap-2">
                     <button
                         className="btn btn-primary me-2"
                         onClick={reloadData}
@@ -286,6 +291,21 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
                                 {d}
                             </button>
                         ))}
+                    </div>
+                    <div className="input-group" style={{ maxWidth: "200px" }}>
+                        <label className="input-group-text" htmlFor="methodSelect">Prediction:</label>
+                        <select
+                            className="form-select"
+                            id="methodSelect"
+                            value={method}
+                            onChange={(e) => setMethod(e.target.value as PredictionMethod)}
+                        >
+                            {methods.map((m) => (
+                                <option key={m.value} value={m.value}>
+                                    {m.label}
+                                </option>
+                            ))}
+                        </select>
                     </div>
                     {isLoading && <div className="spinner-border"></div>}
                 </div>

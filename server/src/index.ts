@@ -159,8 +159,15 @@ app.get("/api/v1/gym_interpline", async (req, res) => {
                 weight: i <= 4 ? 3 : 1, // prefer recent weeks more heavily
             });
         }
-        //const interpLine = makeAverageLine(weeks);
-        const interpLine = makeClosestLine(weeks.slice(1), weeks[0].data);
+        // Calculate prediction line based on selected method
+        const method = (req.query.method as string) || "closest";
+        let interpLine;
+        if (method === "average") {
+            interpLine = makeAverageLine(weeks);
+        } else {
+            // Default to "closest" method
+            interpLine = makeClosestLine(weeks.slice(1), weeks[0].data);
+        }
 
         // calculate all time high
         let allTimeHigh = await conn.query(
@@ -182,6 +189,7 @@ app.get("/api/v1/gym_interpline", async (req, res) => {
             interpLine: interpLine,
             queryMs: queryMs,
             allTimeHigh: allTimeHigh,
+            method: method,
         });
     } catch (err) {
         console.error(err);
