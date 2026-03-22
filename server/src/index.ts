@@ -391,7 +391,7 @@ app.get("/api/v1/gym/export", limiterExport, async (req, res) => {
         return;
     }
 
-    // Limit to 31 days max
+    // Limit to 2000 days (~5.5 years) max
     const maxRangeMs = 2000 * 24 * 60 * 60 * 1000; // ~5.5 years
     const rangeMs = endDate.getTime() - startDate.getTime();
     if (rangeMs > maxRangeMs || rangeMs < 0) {
