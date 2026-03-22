@@ -403,8 +403,10 @@ function TrendsPage() {
                 </a>
             </div>
 
-            {monthlyData && monthlyData.length > 0 && (
+            {monthlyData && monthlyData.length > 0 ? (
                 <MonthlyChart data={monthlyData} />
+            ) : (
+                <div className="alert alert-info">No monthly data available yet.</div>
             )}
 
             <div className="card bg-dark shadow-lg mb-4">
@@ -439,6 +441,10 @@ function TrendsPage() {
                             <li>Hourly patterns are computed over the last 6 months.</li>
                             <li>Peak hours indicate when the gym is typically most crowded.</li>
                             <li>Red zones on charts indicate high utilization (>80%).</li>
+                            <li className="mt-2">
+                                <a href="/" className="btn btn-sm btn-outline-secondary">Back to Live View</a>{" "}
+                                <a href="/api/v1/gym/export?start_date=2026-01-01&end_date=2026-01-31&format=csv" className="btn btn-sm btn-outline-primary" download>Export Data (CSV)</a>
+                            </li>
                         </ul>
                     </small>
                 </div>
