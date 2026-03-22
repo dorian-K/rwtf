@@ -395,7 +395,10 @@ function TrendsPage() {
 
     return (
         <div className="container mt-4">
-            <h1 className="text-white mb-4">Gym Utilization Trends</h1>
+            <div className="d-flex justify-content-between align-items-center mb-4">
+                <h1 className="text-white mb-0">Gym Utilization Trends</h1>
+                <small className="text-muted">Data aggregated from historical records</small>
+            </div>
 
             <div className="mb-4">
                 <a href="/" className="btn btn-outline-secondary">
