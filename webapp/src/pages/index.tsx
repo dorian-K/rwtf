@@ -2,6 +2,7 @@ import { GymInterpLineResponse, GymResponse } from "@/api/Backend";
 import { useBackendContext } from "@/components/BackendProvider";
 import { ApexOptions } from "apexcharts";
 import React from "react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { EMBED_CODE } from "./embed_gym";
 
@@ -329,6 +330,7 @@ function GymStuff() {
     const [picUrl, setPicUrl] = useState<string>("https://rwtf.dorianko.ch/embed_picture.png");
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setEmbedCode(EMBED_CODE(window.location.origin));
         setPicUrl(`${window.location.origin}/embed_picture.png`);
     }, []);
@@ -386,7 +388,7 @@ function GymStuff() {
                     </small>
                     <small>
                         This Website is <a href="https://github.com/dorian-K/rwtf">open-source</a>!
-                        | <a href="/trends">View Historical Trends</a>
+                        | <Link href="/trends">View Historical Trends</Link>
                     </small>
                     <hr />
                     <h4>Embed</h4>

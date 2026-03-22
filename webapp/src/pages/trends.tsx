@@ -381,7 +381,7 @@ function TrendsPage() {
             </div>
 
             <div className="mb-4">
-                <a href="/" className="btn btn-outline-secondary">
+                <Link href="/" className="btn btn-outline-secondary">
                     &larr; Back to Live View
                 </Link>
                 <button
@@ -628,7 +628,7 @@ function TrendsPage() {
                             <li>Peak hours indicate when the gym is typically most crowded.</li>
                             <li>Red zones on charts indicate high utilization (&gt;80%).</li>
                             <li className="mt-2">
-                                <a href="/" className="btn btn-sm btn-outline-secondary">
+                                <Link href="/" className="btn btn-sm btn-outline-secondary">
                                     Back to Live View
                                 </Link>{" "}
                                 <a
