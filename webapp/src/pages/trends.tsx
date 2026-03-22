@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import Link from "next/link";
 import { useBackendContext } from "@/components/BackendProvider";
 import { ApexOptions } from "apexcharts";
 import {
@@ -81,12 +82,7 @@ function MonthlyChart({ data }: { data: MonthlyDataPoint[] }) {
                 <h5 className="mb-0">Monthly Comparison</h5>
             </div>
             <div className="card-body">
-                <ReactApexChart
-                    type="bar"
-                    options={options}
-                    series={series}
-                    height={350}
-                />
+                <ReactApexChart type="bar" options={options} series={series} height={350} />
                 <div className="mt-3">
                     <small className="text-muted">
                         Peak hours by month:{" "}
@@ -188,14 +184,7 @@ function HourlyPatternChart({ data }: { data: HourlyDataPoint[] }) {
         },
     ];
 
-    return (
-        <ReactApexChart
-            type="area"
-            options={options}
-            series={series}
-            height={300}
-        />
-    );
+    return <ReactApexChart type="area" options={options} series={series} height={300} />;
 }
 
 function DayOfWeekChart({ data }: { data: DayOfWeekDataPoint[] }) {
@@ -250,14 +239,7 @@ function DayOfWeekChart({ data }: { data: DayOfWeekDataPoint[] }) {
         },
     ];
 
-    return (
-        <ReactApexChart
-            type="bar"
-            options={options}
-            series={series}
-            height={250}
-        />
-    );
+    return <ReactApexChart type="bar" options={options} series={series} height={250} />;
 }
 
 function HeatmapChart({ data }: { data: HeatmapDataPoint[] }) {
@@ -270,9 +252,7 @@ function HeatmapChart({ data }: { data: HeatmapDataPoint[] }) {
     for (let day = 1; day <= 7; day++) {
         const row: number[] = [];
         for (let hour = 0; hour < 24; hour++) {
-            const point = data.find(
-                (d) => d.day_of_week === day && d.hour === hour
-            );
+            const point = data.find((d) => d.day_of_week === day && d.hour === hour);
             row.push(point ? point.avg_utilization : 0);
         }
         heatmapData.push(row);
@@ -331,12 +311,7 @@ function HeatmapChart({ data }: { data: HeatmapDataPoint[] }) {
                 <h5 className="mb-0">Hour x Day Heatmap</h5>
             </div>
             <div className="card-body">
-                <ReactApexChart
-                    type="heatmap"
-                    options={options}
-                    series={series}
-                    height={350}
-                />
+                <ReactApexChart type="heatmap" options={options} series={series} height={350} />
             </div>
         </div>
     );
@@ -378,7 +353,10 @@ function TrendsPage() {
     if (loading) {
         return (
             <div className="container mt-4">
-                <div className="d-flex justify-content-center align-items-center" style={{ height: "50vh" }}>
+                <div
+                    className="d-flex justify-content-center align-items-center"
+                    style={{ height: "50vh" }}
+                >
                     <div className="spinner-border text-primary" role="status">
                         <span className="visually-hidden">Loading...</span>
                     </div>
@@ -405,7 +383,7 @@ function TrendsPage() {
             <div className="mb-4">
                 <a href="/" className="btn btn-outline-secondary">
                     &larr; Back to Live View
-                </a>
+                </Link>
                 <button
                     className="btn btn-outline-primary ms-2"
                     onClick={() => {
@@ -429,16 +407,28 @@ function TrendsPage() {
                                     <h6 className="text-muted mb-2">Busiest Month</h6>
                                     <h4 className="text-white">
                                         {(() => {
-                                            const busiest = monthlyData!.reduce((max, m) => 
-                                                m.avg_utilization > max.avg_utilization ? m : max, monthlyData![0]);
+                                            const busiest = monthlyData!.reduce(
+                                                (max, m) =>
+                                                    m.avg_utilization > max.avg_utilization
+                                                        ? m
+                                                        : max,
+                                                monthlyData![0],
+                                            );
                                             return busiest ? busiest.month : "N/A";
                                         })()}
                                     </h4>
                                     <small className="text-muted">
                                         {(() => {
-                                            const busiest = monthlyData!.reduce((max, m) => 
-                                                m.avg_utilization > max.avg_utilization ? m : max, monthlyData![0]);
-                                            return busiest ? `${busiest.avg_utilization.toFixed(1)}% avg` : "";
+                                            const busiest = monthlyData!.reduce(
+                                                (max, m) =>
+                                                    m.avg_utilization > max.avg_utilization
+                                                        ? m
+                                                        : max,
+                                                monthlyData![0],
+                                            );
+                                            return busiest
+                                                ? `${busiest.avg_utilization.toFixed(1)}% avg`
+                                                : "";
                                         })()}
                                     </small>
                                 </div>
@@ -446,16 +436,28 @@ function TrendsPage() {
                                     <h6 className="text-muted mb-2">Quietest Month</h6>
                                     <h4 className="text-white">
                                         {(() => {
-                                            const quietest = monthlyData!.reduce((min, m) => 
-                                                m.avg_utilization < min.avg_utilization ? m : min, monthlyData![0]);
+                                            const quietest = monthlyData!.reduce(
+                                                (min, m) =>
+                                                    m.avg_utilization < min.avg_utilization
+                                                        ? m
+                                                        : min,
+                                                monthlyData![0],
+                                            );
                                             return quietest ? quietest.month : "N/A";
                                         })()}
                                     </h4>
                                     <small className="text-muted">
                                         {(() => {
-                                            const quietest = monthlyData!.reduce((min, m) => 
-                                                m.avg_utilization < min.avg_utilization ? m : min, monthlyData![0]);
-                                            return quietest ? `${quietest.avg_utilization.toFixed(1)}% avg` : "";
+                                            const quietest = monthlyData!.reduce(
+                                                (min, m) =>
+                                                    m.avg_utilization < min.avg_utilization
+                                                        ? m
+                                                        : min,
+                                                monthlyData![0],
+                                            );
+                                            return quietest
+                                                ? `${quietest.avg_utilization.toFixed(1)}% avg`
+                                                : "";
                                         })()}
                                     </small>
                                 </div>
@@ -463,18 +465,32 @@ function TrendsPage() {
                                     <h6 className="text-muted mb-2">Peak Hour</h6>
                                     <h4 className="text-white">
                                         {(() => {
-                                            if (!hourlyPattern || hourlyPattern.length === 0) return "N/A";
-                                            const peak = hourlyPattern.reduce((max, h) => 
-                                                h.avg_utilization > max.avg_utilization ? h : max, hourlyPattern[0]);
+                                            if (!hourlyPattern || hourlyPattern.length === 0)
+                                                return "N/A";
+                                            const peak = hourlyPattern.reduce(
+                                                (max, h) =>
+                                                    h.avg_utilization > max.avg_utilization
+                                                        ? h
+                                                        : max,
+                                                hourlyPattern[0],
+                                            );
                                             return peak ? `${peak.hour}:00` : "N/A";
                                         })()}
                                     </h4>
                                     <small className="text-muted">
                                         {(() => {
-                                            if (!hourlyPattern || hourlyPattern.length === 0) return "";
-                                            const peak = hourlyPattern.reduce((max, h) => 
-                                                h.avg_utilization > max.avg_utilization ? h : max, hourlyPattern[0]);
-                                            return peak ? `${peak.avg_utilization.toFixed(1)}% avg` : "";
+                                            if (!hourlyPattern || hourlyPattern.length === 0)
+                                                return "";
+                                            const peak = hourlyPattern.reduce(
+                                                (max, h) =>
+                                                    h.avg_utilization > max.avg_utilization
+                                                        ? h
+                                                        : max,
+                                                hourlyPattern[0],
+                                            );
+                                            return peak
+                                                ? `${peak.avg_utilization.toFixed(1)}% avg`
+                                                : "";
                                         })()}
                                     </small>
                                 </div>
@@ -498,55 +514,85 @@ function TrendsPage() {
                         </p>
                         <div className="row">
                             <div className="col-md-6">
-                                <h6 className="text-success mb-2">🏃 Best Times (Low Utilization)</h6>
+                                <h6 className="text-success mb-2">
+                                    🏃 Best Times (Low Utilization)
+                                </h6>
                                 <ul className="list-unstyled">
-                                    {(
-                                        heatmapData
-                                            .filter((d) => d.sample_count > 10) // Only consider well-sampled times
-                                            .sort((a, b) => a.avg_utilization - b.avg_utilization)
-                                            .slice(0, 3)
-                                            .map((d) => {
-                                                const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-                                                return {
-                                                    day: dayNames[d.day_of_week - 1] || `Day ${d.day_of_week}`,
-                                                    hour: d.hour,
-                                                    utilization: d.avg_utilization,
-                                                };
-                                            })
-                                    ).map((t, i) => (
-                                        <li key={i} className="mb-1">
-                                            <span className="text-success">✓</span>{" "}
-                                            <strong>{t.day}s at {t.hour}:00</strong> — {t.utilization.toFixed(1)}% avg
-                                        </li>
-                                    ))}
+                                    {heatmapData
+                                        .filter((d) => d.sample_count > 10) // Only consider well-sampled times
+                                        .sort((a, b) => a.avg_utilization - b.avg_utilization)
+                                        .slice(0, 3)
+                                        .map((d) => {
+                                            const dayNames = [
+                                                "Sunday",
+                                                "Monday",
+                                                "Tuesday",
+                                                "Wednesday",
+                                                "Thursday",
+                                                "Friday",
+                                                "Saturday",
+                                            ];
+                                            return {
+                                                day:
+                                                    dayNames[d.day_of_week - 1] ||
+                                                    `Day ${d.day_of_week}`,
+                                                hour: d.hour,
+                                                utilization: d.avg_utilization,
+                                            };
+                                        })
+                                        .map((t, i) => (
+                                            <li key={i} className="mb-1">
+                                                <span className="text-success">✓</span>{" "}
+                                                <strong>
+                                                    {t.day}s at {t.hour}:00
+                                                </strong>{" "}
+                                                — {t.utilization.toFixed(1)}% avg
+                                            </li>
+                                        ))}
                                 </ul>
                             </div>
                             <div className="col-md-6">
-                                <h6 className="text-danger mb-2">⚠️ Times to Avoid (High Utilization)</h6>
+                                <h6 className="text-danger mb-2">
+                                    ⚠️ Times to Avoid (High Utilization)
+                                </h6>
                                 <ul className="list-unstyled">
-                                    {(
-                                        heatmapData
-                                            .filter((d) => d.sample_count > 10)
-                                            .sort((a, b) => b.avg_utilization - a.avg_utilization)
-                                            .slice(0, 3)
-                                            .map((d) => {
-                                                const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-                                                return {
-                                                    day: dayNames[d.day_of_week - 1] || `Day ${d.day_of_week}`,
-                                                    hour: d.hour,
-                                                    utilization: d.avg_utilization,
-                                                };
-                                            })
-                                    ).map((t, i) => (
-                                        <li key={i} className="mb-1">
-                                            <span className="text-danger">✗</span>{" "}
-                                            <strong>{t.day}s at {t.hour}:00</strong> — {t.utilization.toFixed(1)}% avg
-                                        </li>
-                                    ))}
+                                    {heatmapData
+                                        .filter((d) => d.sample_count > 10)
+                                        .sort((a, b) => b.avg_utilization - a.avg_utilization)
+                                        .slice(0, 3)
+                                        .map((d) => {
+                                            const dayNames = [
+                                                "Sunday",
+                                                "Monday",
+                                                "Tuesday",
+                                                "Wednesday",
+                                                "Thursday",
+                                                "Friday",
+                                                "Saturday",
+                                            ];
+                                            return {
+                                                day:
+                                                    dayNames[d.day_of_week - 1] ||
+                                                    `Day ${d.day_of_week}`,
+                                                hour: d.hour,
+                                                utilization: d.avg_utilization,
+                                            };
+                                        })
+                                        .map((t, i) => (
+                                            <li key={i} className="mb-1">
+                                                <span className="text-danger">✗</span>{" "}
+                                                <strong>
+                                                    {t.day}s at {t.hour}:00
+                                                </strong>{" "}
+                                                — {t.utilization.toFixed(1)}% avg
+                                            </li>
+                                        ))}
                                 </ul>
                             </div>
                         </div>
-                        <small className="text-muted">Based on last 6 months of data. Only shows times with sufficient data.</small>
+                        <small className="text-muted">
+                            Based on last 6 months of data. Only shows times with sufficient data.
+                        </small>
                     </div>
                 </div>
             )}
@@ -567,9 +613,7 @@ function TrendsPage() {
                 </div>
             </div>
 
-            {heatmapData && heatmapData.length > 0 && (
-                <HeatmapChart data={heatmapData} />
-            )}
+            {heatmapData && heatmapData.length > 0 && <HeatmapChart data={heatmapData} />}
 
             <div className="card bg-dark shadow-lg mb-4">
                 <div className="card-header">
@@ -584,8 +628,16 @@ function TrendsPage() {
                             <li>Peak hours indicate when the gym is typically most crowded.</li>
                             <li>Red zones on charts indicate high utilization (&gt;80%).</li>
                             <li className="mt-2">
-                                <a href="/" className="btn btn-sm btn-outline-secondary">Back to Live View</a>{" "}
-                                <a href="/api/v1/gym/export?start_date=2026-01-01&end_date=2026-01-31&format=csv" className="btn btn-sm btn-outline-primary" download>Export Data (CSV)</a>
+                                <a href="/" className="btn btn-sm btn-outline-secondary">
+                                    Back to Live View
+                                </Link>{" "}
+                                <a
+                                    href="/api/v1/gym/export?start_date=2026-01-01&end_date=2026-01-31&format=csv"
+                                    className="btn btn-sm btn-outline-primary"
+                                    download
+                                >
+                                    Export Data (CSV)
+                                </a>
                             </li>
                         </ul>
                     </small>

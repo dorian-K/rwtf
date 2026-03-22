@@ -361,7 +361,10 @@ function GymStuff() {
                                 <strong>Prediction</strong>:
                             </dt>
                             <dd>
-                                Prediction of the number of people in the gym for the remainder of the day, based on historical data and the current trend. Prediction for the current day becomes more accurate as the day progresses and more data points are available.
+                                Prediction of the number of people in the gym for the remainder of
+                                the day, based on historical data and the current trend. Prediction
+                                for the current day becomes more accurate as the day progresses and
+                                more data points are available.
                             </dd>
                             <dt>
                                 <strong>Historic Arrival</strong>:
@@ -382,7 +385,8 @@ function GymStuff() {
                         </dl>
                     </small>
                     <small>
-                        This Website is <a href="https://github.com/dorian-K/rwtf">open-source</a>! | <a href="/trends">View Historical Trends</a>
+                        This Website is <a href="https://github.com/dorian-K/rwtf">open-source</a>!
+                        | <a href="/trends">View Historical Trends</a>
                     </small>
                     <hr />
                     <h4>Embed</h4>

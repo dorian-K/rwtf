@@ -100,9 +100,21 @@ export class Backend {
         return `/api/v1/study?url=${url}`;
     }
 
-    getGymHistory(startDate: string, endDate: string, aggregation: string = "day"): Promise<{ data: HistoryDataPoint[]; aggregation: string; startDate: string; endDate: string; queryMs: number }> {
+    getGymHistory(
+        startDate: string,
+        endDate: string,
+        aggregation: string = "day",
+    ): Promise<{
+        data: HistoryDataPoint[];
+        aggregation: string;
+        startDate: string;
+        endDate: string;
+        queryMs: number;
+    }> {
         return this.processResponse(
-            this.fetch(`/api/v1/gym/history?start_date=${startDate}&end_date=${endDate}&aggregation=${aggregation}`)
+            this.fetch(
+                `/api/v1/gym/history?start_date=${startDate}&end_date=${endDate}&aggregation=${aggregation}`,
+            ),
         );
     }
 
