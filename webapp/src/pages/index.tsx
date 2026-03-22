@@ -395,6 +395,20 @@ function GymStuff() {
                         published here:
                         <CopyStation str={picUrl} />
                     </small>
+                    <hr />
+                    <h4>Export Data</h4>
+                    <small>
+                        Download gym utilization data for your own analysis.
+                        <br />
+                        <a href="/api/v1/gym/export?start_date=2026-01-01&end_date=2026-01-31&format=csv" className="btn btn-sm btn-outline-primary mt-2" download>
+                            Download Sample (Jan 2026, CSV)
+                        </a>
+                        <a href="/api/v1/gym/export?start_date=2026-01-01&end_date=2026-01-31&format=json" className="btn btn-sm btn-outline-secondary mt-2 ms-2" download>
+                            Download Sample (Jan 2026, JSON)
+                        </a>
+                        <br />
+                        <span className="text-muted small">Max 31 days per export. Last 5 exports limited per hour.</span>
+                    </small>
                 </div>
             </div>
         </div>

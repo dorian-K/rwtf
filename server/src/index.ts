@@ -362,6 +362,107 @@ app.get("/api/v1/is_aachen", async (req, res) => {
     }
 });
 
+// Rate limiter for export endpoint: 5 requests per hour per IP
+const limiterExport = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+// GET /api/v1/gym/export - Export gym data as CSV or JSON
+// Query params: start_date, end_date, format (csv/json)
+app.get("/api/v1/gym/export", limiterExport, async (req, res) => {
+    const startDateStr = req.query.start_date as string;
+    const endDateStr = req.query.end_date as string;
+    const format = (req.query.format as string) || "csv";
+
+    if (!startDateStr || !endDateStr) {
+        res.status(400).json({ error: true, msg: "start_date and end_date are required" });
+        return;
+    }
+
+    const startDate = new Date(startDateStr);
+    const endDate = new Date(endDateStr);
+
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+        res.status(400).json({ error: true, msg: "Invalid date format" });
+        return;
+    }
+
+    // Limit to 31 days max
+    const maxRangeMs = 31 * 24 * 60 * 60 * 1000;
+    const rangeMs = endDate.getTime() - startDate.getTime();
+    if (rangeMs > maxRangeMs || rangeMs < 0) {
+        res.status(400).json({ error: true, msg: "Date range cannot exceed 31 days" });
+        return;
+    }
+
+    const MAX_ROWS = 10000;
+    let conn;
+    try {
+        conn = await getConnection();
+
+        const rows = await conn.query(
+            `SELECT auslastung, created_at 
+            FROM rwth_gym 
+            WHERE created_at >= ? AND created_at <= ?
+            ORDER BY created_at
+            LIMIT ?`,
+            [startDate, endDate, MAX_ROWS]
+        );
+
+        // Check if we're hitting the limit
+        const countResult = await conn.query(
+            `SELECT COUNT(*) as count FROM rwth_gym WHERE created_at >= ? AND created_at <= ?`,
+            [startDate, endDate]
+        );
+        const totalCount = countResult[0]?.count || 0;
+        const truncated = totalCount > MAX_ROWS;
+
+        if (format === "json") {
+            res.setHeader("Content-Type", "application/json");
+            res.setHeader("Content-Disposition", `attachment; filename="gym_data_${startDateStr}_${endDateStr}.json"`);
+            res.json({
+                data: rows.map((r: any) => ({
+                    timestamp: r.created_at,
+                    utilization: r.auslastung,
+                })),
+                metadata: {
+                    start_date: startDateStr,
+                    end_date: endDateStr,
+                    total_samples: rows.length,
+                    truncated: truncated,
+                    total_available: totalCount,
+                },
+            });
+        } else {
+            // CSV format
+            res.setHeader("Content-Type", "text/csv");
+            res.setHeader("Content-Disposition", `attachment; filename="gym_data_${startDateStr}_${endDateStr}.csv"`);
+
+            // Build CSV content
+            let csv = "timestamp,utilization\n";
+            for (const row of rows) {
+                csv += `${row.created_at},${row.auslastung}\n`;
+            }
+
+            if (truncated) {
+                csv += `\n# Note: Data truncated. ${totalCount} total samples available, showing first ${MAX_ROWS}.\n`;
+            }
+
+            res.send(csv);
+        }
+
+        console.log(`Export: ${req.ip} downloaded ${rows.length} rows (format=${format}, range=${startDateStr} to ${endDateStr})`);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: true });
+    } finally {
+        if (conn) conn.end();
+    }
+});
+
 app.get("/api", (req, res) => {
     res.send("Hello World!");
 });
