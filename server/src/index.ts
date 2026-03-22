@@ -392,14 +392,14 @@ app.get("/api/v1/gym/export", limiterExport, async (req, res) => {
     }
 
     // Limit to 31 days max
-    const maxRangeMs = 31 * 24 * 60 * 60 * 1000;
+    const maxRangeMs = 2000 * 24 * 60 * 60 * 1000; // ~5.5 years
     const rangeMs = endDate.getTime() - startDate.getTime();
     if (rangeMs > maxRangeMs || rangeMs < 0) {
-        res.status(400).json({ error: true, msg: "Date range cannot exceed 31 days" });
+        res.status(400).json({ error: true, msg: "Date range cannot exceed 2000 days" });
         return;
     }
 
-    const MAX_ROWS = 10000;
+    const MAX_ROWS = 200000; // Increased for "all data" export (covers ~2000 days at 15-min intervals)
     let conn;
     try {
         conn = await getConnection();

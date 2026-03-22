@@ -328,39 +328,44 @@ function DataExportForm() {
     const today = new Date();
     const formatDate = (d: Date) => d.toISOString().split("T")[0];
 
-    const getLast7Days = () => {
+    const getLastYear = () => {
         const d = new Date(today);
-        d.setDate(d.getDate() - 7);
+        d.setFullYear(d.getFullYear() - 1);
         return d;
     };
 
-    const getLast30Days = () => {
-        const d = new Date(today);
-        d.setDate(d.getDate() - 30);
-        return d;
+    const getAllDataStart = () => {
+        // Return a date early enough to cover all historical data
+        // RWTF project started around 2024, so 2020 is safe
+        return new Date("2020-01-01");
     };
 
-    const [startDate, setStartDate] = useState<string>(formatDate(getLast30Days()));
+    const [startDate, setStartDate] = useState<string>(formatDate(getLastYear()));
     const [endDate, setEndDate] = useState<string>(formatDate(today));
     const [format, setFormat] = useState<"csv" | "json">("csv");
     const [error, setError] = useState<string | null>(null);
 
-    const setPresetRange = (days: number) => {
+    const setPresetRange = (preset: "lastYear" | "allData") => {
         const end = new Date();
         const start = new Date();
-        start.setDate(start.getDate() - days);
+        if (preset === "lastYear") {
+            start.setFullYear(start.getFullYear() - 1);
+        } else { // allData
+            start.setFullYear(2020, 0, 1); // Jan 1, 2020
+        }
         setStartDate(formatDate(start));
         setEndDate(formatDate(end));
     };
 
-    const handleExport = () => {
+        const handleExport = () => {
         setError(null);
         const start = new Date(startDate);
         const end = new Date(endDate);
         const diffDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
 
-        if (diffDays > 31) {
-            setError("Date range cannot exceed 31 days");
+        // Backend limit: 2000 days (~5.5 years)
+        if (diffDays > 2000) {
+            setError("Date range cannot exceed 2000 days");
             return;
         }
         if (diffDays < 0) {
@@ -378,23 +383,16 @@ function DataExportForm() {
                 <button
                     type="button"
                     className="btn btn-outline-secondary"
-                    onClick={() => setPresetRange(7)}
+                    onClick={() => setPresetRange("lastYear")}
                 >
-                    Last 7 days
+                    Last year
                 </button>
                 <button
                     type="button"
                     className="btn btn-outline-secondary"
-                    onClick={() => setPresetRange(14)}
+                    onClick={() => setPresetRange("allData")}
                 >
-                    Last 14 days
-                </button>
-                <button
-                    type="button"
-                    className="btn btn-outline-secondary"
-                    onClick={() => setPresetRange(30)}
-                >
-                    Last 30 days
+                    All data
                 </button>
             </div>
             <div className="row g-2 align-items-end">
