@@ -46,6 +46,24 @@ function LiveStatusCard({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterp
     };
     const timeSlots = getTimeSlots();
 
+    // Find best time to go in next 3 hours
+    const getBestTime = () => {
+        if (!gymLine?.interpLine || gymLine.interpLine.length === 0) return null;
+        const now = new Date();
+        const threeHoursLater = new Date(now.getTime() + 3 * 3600000);
+        let best = null;
+        for (const p of gymLine.interpLine) {
+            const ptTime = new Date(p.created_at);
+            if (ptTime >= now && ptTime <= threeHoursLater) {
+                if (!best || p.auslastung < best.value) {
+                    best = { time: ptTime, value: p.auslastung };
+                }
+            }
+        }
+        return best;
+    };
+    const bestTime = getBestTime();
+
     const getStatusColor = (util: number) => {
         if (util < 40) return "text-success";
         if (util < 65) return "text-warning";
@@ -77,6 +95,13 @@ function LiveStatusCard({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterp
                         </div>
                     ))}
                 </div>
+                {bestTime && bestTime.value < 50 && (
+                    <div className="mt-2 pt-2 border-top border-secondary text-center">
+                        <small className="text-success">
+                            💡 Best time: {bestTime.time.getHours()}:00 ({bestTime.value.toFixed(0)}%)
+                        </small>
+                    </div>
+                )}
             </div>
         </div>
     );
