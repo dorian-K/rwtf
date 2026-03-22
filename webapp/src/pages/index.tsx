@@ -8,6 +8,9 @@ import { EMBED_CODE } from "./embed_gym";
 const ReactApexChart = React.lazy(() => import("react-apexcharts"));
 
 function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineResponse }) {
+    const methodName = gymLine.method ? 
+        { closest: "Similar Weeks", average: "Simple Average", median: "Robust Average", dayofweek: "Same Weekday" }[gymLine.method] || "Prediction"
+        : "Prediction";
     let todayReference;
     if (gym.data_today.length > 0) {
         todayReference = new Date(gym.data_today[0].created_at);
@@ -172,7 +175,7 @@ function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineR
             })),
         },
         {
-            name: "Prediction",
+            name: methodName,
             data: gymLine.interpLine.map((g) => {
                 const gDate = new Date(g.created_at);
                 return {
