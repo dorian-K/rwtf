@@ -476,6 +476,70 @@ function TrendsPage() {
                 <div className="alert alert-info">No monthly data available yet.</div>
             )}
 
+            {heatmapData && heatmapData.length > 0 && (
+                <div className="card bg-dark shadow-lg mb-4">
+                    <div className="card-header">
+                        <h5 className="mb-0">When to Go</h5>
+                    </div>
+                    <div className="card-body">
+                        <p className="card-text text-white">
+                            Based on historical data, the best times to go to the gym are:
+                        </p>
+                        <div className="row">
+                            <div className="col-md-6">
+                                <h6 className="text-success mb-2">🏃 Best Times (Low Utilization)</h6>
+                                <ul className="list-unstyled">
+                                    {(
+                                        heatmapData
+                                            .filter((d) => d.sample_count > 10) // Only consider well-sampled times
+                                            .sort((a, b) => a.avg_utilization - b.avg_utilization)
+                                            .slice(0, 3)
+                                            .map((d) => {
+                                                const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+                                                return {
+                                                    day: dayNames[d.day_of_week - 1] || `Day ${d.day_of_week}`,
+                                                    hour: d.hour,
+                                                    utilization: d.avg_utilization,
+                                                };
+                                            })
+                                    ).map((t, i) => (
+                                        <li key={i} className="mb-1">
+                                            <span className="text-success">✓</span>{" "}
+                                            <strong>{t.day}s at {t.hour}:00</strong> — {t.utilization.toFixed(1)}% avg
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                            <div className="col-md-6">
+                                <h6 className="text-danger mb-2">⚠️ Times to Avoid (High Utilization)</h6>
+                                <ul className="list-unstyled">
+                                    {(
+                                        heatmapData
+                                            .filter((d) => d.sample_count > 10)
+                                            .sort((a, b) => b.avg_utilization - a.avg_utilization)
+                                            .slice(0, 3)
+                                            .map((d) => {
+                                                const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+                                                return {
+                                                    day: dayNames[d.day_of_week - 1] || `Day ${d.day_of_week}`,
+                                                    hour: d.hour,
+                                                    utilization: d.avg_utilization,
+                                                };
+                                            })
+                                    ).map((t, i) => (
+                                        <li key={i} className="mb-1">
+                                            <span className="text-danger">✗</span>{" "}
+                                            <strong>{t.day}s at {t.hour}:00</strong> — {t.utilization.toFixed(1)}% avg
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        </div>
+                        <small className="text-muted">Based on last 6 months of data. Only shows times with sufficient data.</small>
+                    </div>
+                </div>
+            )}
+
             <div className="card bg-dark shadow-lg mb-4">
                 <div className="card-header">
                     <h5 className="mb-0">Hourly & Weekly Patterns</h5>
