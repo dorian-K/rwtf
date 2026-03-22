@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, Suspense, lazy } from "react";
 import Link from "next/link";
 import { useBackendContext } from "@/components/BackendProvider";
 import { ApexOptions } from "apexcharts";
@@ -9,10 +9,11 @@ import {
     HeatmapDataPoint,
 } from "@/api/Backend";
 
-const ReactApexChart = React.lazy(async () => {
-    const ApexCharts = (await import("apexcharts")).default;
-    return { default: ApexCharts as unknown as React.ComponentType<any> };
-}) as any;
+const ReactApexChart = lazy(() =>
+    import("react-apexcharts").then((m) => ({
+        default: m.default as unknown as React.ComponentType<any>,
+    })),
+);
 
 function MonthlyChart({ data }: { data: MonthlyDataPoint[] }) {
     const options: ApexOptions = {
@@ -50,7 +51,6 @@ function MonthlyChart({ data }: { data: MonthlyDataPoint[] }) {
                 text: "Avg Utilization (%)",
             },
             min: 0,
-            max: 100,
         },
         fill: {
             opacity: 1,
@@ -82,7 +82,11 @@ function MonthlyChart({ data }: { data: MonthlyDataPoint[] }) {
                 <h5 className="mb-0">Monthly Comparison</h5>
             </div>
             <div className="card-body">
-                <ReactApexChart type="bar" options={options} series={series} height={350} />
+                <Suspense
+                    fallback={<div className="text-center text-muted py-4">Loading chart...</div>}
+                >
+                    <ReactApexChart type="bar" options={options} series={series} height={350} />
+                </Suspense>
                 <div className="mt-3">
                     <small className="text-muted">
                         Peak hours by month:{" "}
@@ -122,7 +126,6 @@ function HourlyPatternChart({ data }: { data: HourlyDataPoint[] }) {
                 text: "Avg Utilization (%)",
             },
             min: 0,
-            max: 100,
         },
         fill: {
             type: "gradient",
@@ -184,7 +187,11 @@ function HourlyPatternChart({ data }: { data: HourlyDataPoint[] }) {
         },
     ];
 
-    return <ReactApexChart type="area" options={options} series={series} height={300} />;
+    return (
+        <Suspense fallback={<div className="text-center text-muted py-4">Loading chart...</div>}>
+            <ReactApexChart type="area" options={options} series={series} height={300} />
+        </Suspense>
+    );
 }
 
 function DayOfWeekChart({ data }: { data: DayOfWeekDataPoint[] }) {
@@ -213,7 +220,6 @@ function DayOfWeekChart({ data }: { data: DayOfWeekDataPoint[] }) {
                 text: "Avg Utilization (%)",
             },
             min: 0,
-            max: 100,
         },
         fill: {
             opacity: 1,
@@ -245,15 +251,15 @@ function DayOfWeekChart({ data }: { data: DayOfWeekDataPoint[] }) {
 function HeatmapChart({ data }: { data: HeatmapDataPoint[] }) {
     // Prepare data for heatmap
     const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    const hours = Array.from({ length: 24 }, (_, i) => i);
 
-    // Group by day and hour
-    const heatmapData: number[][] = [];
-    for (let day = 1; day <= 7; day++) {
-        const row: number[] = [];
+    // Group by day and hour (API: day_of_week 1=Sun to 7=Sat)
+    const heatmapData: { x: number; y: number | null }[][] = [];
+    for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
+        const row: { x: number; y: number | null }[] = [];
         for (let hour = 0; hour < 24; hour++) {
-            const point = data.find((d) => d.day_of_week === day && d.hour === hour);
-            row.push(point ? point.avg_utilization : 0);
+            // API day_of_week: 1=Sun through 7=Sat
+            const point = data.find((d) => d.day_of_week === dayIndex + 1 && d.hour === hour);
+            row.push({ x: hour, y: point ? point.avg_utilization : null });
         }
         heatmapData.push(row);
     }
@@ -311,7 +317,11 @@ function HeatmapChart({ data }: { data: HeatmapDataPoint[] }) {
                 <h5 className="mb-0">Hour x Day Heatmap</h5>
             </div>
             <div className="card-body">
-                <ReactApexChart type="heatmap" options={options} series={series} height={350} />
+                <Suspense
+                    fallback={<div className="text-center text-muted py-4">Loading chart...</div>}
+                >
+                    <ReactApexChart type="heatmap" options={options} series={series} height={350} />
+                </Suspense>
             </div>
         </div>
     );
@@ -386,8 +396,8 @@ function TrendsPage() {
                 </Link>
                 <button
                     className="btn btn-outline-primary ms-2"
-                    onClick={() => {
-                        navigator.clipboard.writeText(window.location.href);
+                    onClick={async () => {
+                        await navigator.clipboard.writeText(window.location.href);
                         alert("Link copied to clipboard!");
                     }}
                 >
@@ -630,14 +640,7 @@ function TrendsPage() {
                             <li className="mt-2">
                                 <Link href="/" className="btn btn-sm btn-outline-secondary">
                                     Back to Live View
-                                </Link>{" "}
-                                <a
-                                    href="/api/v1/gym/export?start_date=2026-01-01&end_date=2026-01-31&format=csv"
-                                    className="btn btn-sm btn-outline-primary"
-                                    download
-                                >
-                                    Export Data (CSV)
-                                </a>
+                                </Link>
                             </li>
                         </ul>
                     </small>
