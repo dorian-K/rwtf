@@ -404,6 +404,15 @@ function TrendsPage() {
                 <a href="/" className="btn btn-outline-secondary">
                     &larr; Back to Live View
                 </a>
+                <button
+                    className="btn btn-outline-primary ms-2"
+                    onClick={() => {
+                        navigator.clipboard.writeText(window.location.href);
+                        alert("Link copied to clipboard!");
+                    }}
+                >
+                    Share Trends
+                </button>
             </div>
 
             {monthlyData && monthlyData.length > 0 ? (
