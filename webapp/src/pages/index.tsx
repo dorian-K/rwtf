@@ -7,6 +7,81 @@ import { EMBED_CODE } from "./embed_gym";
 
 const ReactApexChart = React.lazy(() => import("react-apexcharts"));
 
+function LiveStatusCard({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineResponse }) {
+    // Current utilization
+    const currentUtil = gym.data_today.length > 0 ? gym.data_today[gym.data_today.length - 1].auslastung : null;
+
+    // Go / Wait decision
+    const getGoWait = () => {
+        if (currentUtil === null || !gymLine?.interpLine) return null;
+        const nextHour = gymLine.interpLine[Math.min(12, gymLine.interpLine.length - 1)]?.auslastung || currentUtil;
+
+        if (currentUtil < 40) {
+            return { decision: "GO", emoji: "🏃", color: "success", text: "Perfect time!" };
+        }
+        if (currentUtil < 60 && nextHour < currentUtil) {
+            return { decision: "GO", emoji: "🏃", color: "success", text: "Getting quieter!" };
+        }
+        return { decision: "WAIT", emoji: "⏰", color: "warning", text: "Busy right now" };
+    };
+    const goWait = getGoWait();
+
+    // Quick time slots: Now, 1h, 2h
+    const getTimeSlots = () => {
+        if (!gymLine?.interpLine || gymLine.interpLine.length === 0) return [];
+        const now = new Date();
+        const slots = [];
+        for (let i = 0; i <= 2; i++) {
+            const target = new Date(now.getTime() + i * 3600000);
+            const targetHour = target.getHours();
+            let closest = gymLine.interpLine[0];
+            let minDiff = 24;
+            for (const p of gymLine.interpLine) {
+                const diff = Math.abs(new Date(p.created_at).getHours() - targetHour);
+                if (diff < minDiff) { minDiff = diff; closest = p; }
+            }
+            slots.push({ label: i === 0 ? "Now" : `${i}h`, value: closest?.auslastung || 0 });
+        }
+        return slots;
+    };
+    const timeSlots = getTimeSlots();
+
+    const getStatusColor = (util: number) => {
+        if (util < 40) return "text-success";
+        if (util < 65) return "text-warning";
+        return "text-danger";
+    };
+
+    const getMood = (util: number) => {
+        if (util < 25) return "😌";
+        if (util < 50) return "🙂";
+        if (util < 75) return "😐";
+        return "😰";
+    };
+
+    return (
+        <div className="card bg-dark shadow-lg mb-3">
+            {goWait && (
+                <div className={`card-header bg-${goWait.color} text-white d-flex align-items-center justify-content-center py-2`}>
+                    <span className="me-2" style={{fontSize: "1.5rem"}}>{goWait.emoji}</span>
+                    <span className="h4 mb-0">{goWait.decision} - {goWait.text}</span>
+                </div>
+            )}
+            <div className="card-body py-2">
+                <div className="row text-center small">
+                    {timeSlots.map((slot) => (
+                        <div key={slot.label} className="col-4">
+                            <div className="text-muted">{slot.label}</div>
+                            <div className={`fw-bold ${getStatusColor(slot.value)}`}>{slot.value.toFixed(0)}%</div>
+                            <div className="text-muted">{getMood(slot.value)}</div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+}
+
 function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineResponse }) {
     let todayReference;
     if (gym.data_today.length > 0) {
@@ -260,6 +335,7 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
     return (
         <>
             {error && <div className="alert alert-danger">{error}</div>}
+            {gym && gymLine && <LiveStatusCard gym={gym} gymLine={gymLine} />}
             <div style={{ height: "500px" }}>
                 {gym && gymLine && <ChartImpl gym={gym} gymLine={gymLine} />}
             </div>
