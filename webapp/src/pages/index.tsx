@@ -8,13 +8,31 @@ import { EMBED_CODE } from "./embed_gym";
 const ReactApexChart = React.lazy(() => import("react-apexcharts"));
 
 function LiveStatusCard({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineResponse }) {
-    // Current utilization
-    const currentUtil = gym.data_today.length > 0 ? gym.data_today[gym.data_today.length - 1].auslastung : null;
+    // Current utilization — sort by timestamp to ensure we get the latest point
+    const latestDataPoint =
+        gym.data_today.length > 0
+            ? [...gym.data_today].sort(
+                  (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+              )[gym.data_today.length - 1]
+            : null;
+    const currentUtil = latestDataPoint ? latestDataPoint.auslastung : null;
 
     // Go / Wait decision
     const getGoWait = () => {
         if (currentUtil === null || !gymLine?.interpLine) return null;
-        const nextHour = gymLine.interpLine[Math.min(12, gymLine.interpLine.length - 1)]?.auslastung || currentUtil;
+        // Find the prediction closest to now + 1 hour (using full timestamp, not fixed index)
+        // eslint-disable-next-line react-hooks/purity
+        const target = new Date(Date.now() + 3600000);
+        let closestPoint = gymLine.interpLine[0];
+        let minDiff = Infinity;
+        for (const p of gymLine.interpLine) {
+            const diff = Math.abs(new Date(p.created_at).getTime() - target.getTime());
+            if (diff < minDiff) {
+                minDiff = diff;
+                closestPoint = p;
+            }
+        }
+        const nextHour = closestPoint?.auslastung ?? currentUtil;
 
         if (currentUtil < 40) {
             return { decision: "GO", emoji: "🏃", color: "success", text: "Perfect time!" };
@@ -33,28 +51,31 @@ function LiveStatusCard({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterp
         const slots = [];
         for (let i = 0; i <= 2; i++) {
             const target = new Date(now.getTime() + i * 3600000);
-            const targetHour = target.getHours();
             let closest = gymLine.interpLine[0];
-            let minDiff = 24;
+            let minDiff = Infinity;
             for (const p of gymLine.interpLine) {
-                const diff = Math.abs(new Date(p.created_at).getHours() - targetHour);
-                if (diff < minDiff) { minDiff = diff; closest = p; }
+                const diff = Math.abs(new Date(p.created_at).getTime() - target.getTime());
+                if (diff < minDiff) {
+                    minDiff = diff;
+                    closest = p;
+                }
             }
-            slots.push({ label: i === 0 ? "Now" : `${i}h`, value: closest?.auslastung || 0 });
+            slots.push({ label: i === 0 ? "Now" : `${i}h`, value: closest?.auslastung ?? 0 });
         }
         return slots;
     };
     const timeSlots = getTimeSlots();
 
-    // Find best time to go in next 3 hours
+    // Find best time to go in next 3 hours (account for dayoffset)
     const getBestTime = () => {
         if (!gymLine?.interpLine || gymLine.interpLine.length === 0) return null;
-        const now = new Date();
-        const threeHoursLater = new Date(now.getTime() + 3 * 3600000);
+        // eslint-disable-next-line react-hooks/purity
+        const refTime = new Date(Date.now() + dayoffset * 24 * 3600000);
+        const threeHoursLater = new Date(refTime.getTime() + 3 * 3600000);
         let best = null;
         for (const p of gymLine.interpLine) {
             const ptTime = new Date(p.created_at);
-            if (ptTime >= now && ptTime <= threeHoursLater) {
+            if (ptTime >= refTime && ptTime <= threeHoursLater) {
                 if (!best || p.auslastung < best.value) {
                     best = { time: ptTime, value: p.auslastung };
                 }
@@ -64,15 +85,16 @@ function LiveStatusCard({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterp
     };
     const bestTime = getBestTime();
 
-    // For people already at the gym: "How long until it gets crowded?"
+    // For people already at the gym: "How long until it gets crowded?" (account for dayoffset)
     const getStayDuration = () => {
         if (currentUtil === null || !gymLine?.interpLine || currentUtil > 70) return null;
-        const now = new Date();
+        // eslint-disable-next-line react-hooks/purity
+        const refTime = new Date(Date.now() + dayoffset * 24 * 3600000);
         // Find when it hits 70% (uncomfortable)
         for (const p of gymLine.interpLine) {
             const ptTime = new Date(p.created_at);
-            if (ptTime > now && p.auslastung >= 70) {
-                const minsUntil = Math.round((ptTime.getTime() - now.getTime()) / 60000);
+            if (ptTime > refTime && p.auslastung >= 70) {
+                const minsUntil = Math.round((ptTime.getTime() - refTime.getTime()) / 60000);
                 return { until: ptTime, mins: minsUntil, value: p.auslastung };
             }
         }
@@ -97,9 +119,15 @@ function LiveStatusCard({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterp
     return (
         <div className="card bg-dark shadow-lg mb-3">
             {goWait && (
-                <div className={`card-header bg-${goWait.color} text-white d-flex align-items-center justify-content-center py-2`}>
-                    <span className="me-2" style={{fontSize: "1.5rem"}}>{goWait.emoji}</span>
-                    <span className="h4 mb-0">{goWait.decision} - {goWait.text}</span>
+                <div
+                    className={`card-header bg-${goWait.color} text-white d-flex align-items-center justify-content-center py-2`}
+                >
+                    <span className="me-2" style={{ fontSize: "1.5rem" }}>
+                        {goWait.emoji}
+                    </span>
+                    <span className="h4 mb-0">
+                        {goWait.decision} - {goWait.text}
+                    </span>
                 </div>
             )}
             <div className="card-body py-2">
@@ -107,7 +135,9 @@ function LiveStatusCard({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterp
                     {timeSlots.map((slot) => (
                         <div key={slot.label} className="col-4">
                             <div className="text-muted">{slot.label}</div>
-                            <div className={`fw-bold ${getStatusColor(slot.value)}`}>{slot.value.toFixed(0)}%</div>
+                            <div className={`fw-bold ${getStatusColor(slot.value)}`}>
+                                {slot.value.toFixed(0)}%
+                            </div>
                             <div className="text-muted">{getMood(slot.value)}</div>
                         </div>
                     ))}
@@ -115,7 +145,8 @@ function LiveStatusCard({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterp
                 {bestTime && bestTime.value < 50 && (
                     <div className="mt-2 pt-2 border-top border-secondary text-center">
                         <small className="text-success">
-                            💡 Best time: {bestTime.time.getHours()}:00 ({bestTime.value.toFixed(0)}%)
+                            💡 Best time: {bestTime.time.getHours()}:00 ({bestTime.value.toFixed(0)}
+                            %)
                         </small>
                     </div>
                 )}
@@ -123,12 +154,11 @@ function LiveStatusCard({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterp
                     <div className="mt-2 pt-2 border-top border-secondary text-center">
                         {stayDuration.until ? (
                             <small className="text-info">
-                                ⏱️ You have ~{stayDuration.mins} min until crowded ({stayDuration.value.toFixed(0)}%)
+                                ⏱️ You have ~{stayDuration.mins} min until crowded (
+                                {stayDuration.value.toFixed(0)}%)
                             </small>
                         ) : (
-                            <small className="text-success">
-                                ⏱️ Gym stays comfortable for ~3h
-                            </small>
+                            <small className="text-success">⏱️ Gym stays comfortable for ~3h</small>
                         )}
                     </div>
                 )}
@@ -370,9 +400,12 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
         for (const p of gymLine.interpLine) {
             const ptTime = new Date(p.created_at);
             const diff = Math.abs(ptTime.getTime() - target.getTime());
-            if (diff < minDiff) { minDiff = diff; closest = p; }
+            if (diff < minDiff) {
+                minDiff = diff;
+                closest = p;
+            }
         }
-        return { time: target, value: closest?.auslastung || null };
+        return { time: target, value: closest?.auslastung ?? null };
     };
 
     const reloadData = () => {
@@ -441,7 +474,9 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
                         ))}
                     </div>
                     <div className="input-group" style={{ maxWidth: "180px", marginLeft: "8px" }}>
-                        <label className="input-group-text" htmlFor="predTime">Predict for:</label>
+                        <label className="input-group-text" htmlFor="predTime">
+                            Predict for:
+                        </label>
                         <input
                             type="time"
                             className="form-control"
@@ -451,12 +486,24 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
                         />
                     </div>
                     {predTime && (
-                        <div className="badge bg-info align-self-center" style={{ marginLeft: "8px" }}>
+                        <div
+                            className="badge bg-info align-self-center"
+                            style={{ marginLeft: "8px" }}
+                        >
                             {(() => {
                                 const pred = getPredictionForTime(predTime);
                                 if (pred.value !== null) {
-                                    const color = pred.value < 40 ? "success" : pred.value < 65 ? "warning" : "danger";
-                                    return <span className={`text-${color}`}>{pred.value.toFixed(0)}%</span>;
+                                    const color =
+                                        pred.value < 40
+                                            ? "success"
+                                            : pred.value < 65
+                                              ? "warning"
+                                              : "danger";
+                                    return (
+                                        <span className={`text-${color}`}>
+                                            {pred.value.toFixed(0)}%
+                                        </span>
+                                    );
                                 }
                                 return "—";
                             })()}
@@ -504,6 +551,7 @@ function GymStuff() {
     const [picUrl, setPicUrl] = useState<string>("https://rwtf.dorianko.ch/embed_picture.png");
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setEmbedCode(EMBED_CODE(window.location.origin));
         setPicUrl(`${window.location.origin}/embed_picture.png`);
     }, []);
@@ -536,7 +584,10 @@ function GymStuff() {
                                 <strong>Prediction</strong>:
                             </dt>
                             <dd>
-                                Prediction of the number of people in the gym for the remainder of the day, based on historical data and the current trend. Prediction for the current day becomes more accurate as the day progresses and more data points are available.
+                                Prediction of the number of people in the gym for the remainder of
+                                the day, based on historical data and the current trend. Prediction
+                                for the current day becomes more accurate as the day progresses and
+                                more data points are available.
                             </dd>
                             <dt>
                                 <strong>Historic Arrival</strong>:
