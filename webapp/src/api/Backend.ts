@@ -14,7 +14,7 @@ export interface GymInterpLineResponse {
     method?: string;
 }
 
-export type PredictionMethod = "closest" | "average";
+export type PredictionMethod = "closest" | "average" | "median" | "dayofweek";
 
 export class Backend {
     fetch(input: string, init?: RequestInit): Promise<Response> {

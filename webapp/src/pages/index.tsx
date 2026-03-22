@@ -224,6 +224,8 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
     const methods: { value: PredictionMethod; label: string }[] = [
         { value: "closest", label: "Similar Weeks" },
         { value: "average", label: "Simple Average" },
+        { value: "median", label: "Robust Average" },
+        { value: "dayofweek", label: "Same Weekday" },
     ];
     const [method, setMethod] = useState<PredictionMethod>("closest");
     const api = useBackendContext();

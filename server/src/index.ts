@@ -5,7 +5,7 @@ import { PoolConnection } from "mariadb";
 import { SAMPLE } from "./sample_data.js";
 import { downloadStreamFile, isAachener } from "./study.js";
 import { rateLimit } from "express-rate-limit";
-import { GymDataWeek, makeAverageLine, makeClosestLine } from "./gym_math.js";
+import { GymDataWeek, makeAverageLine, makeClosestLine, makeDayOfWeekLine } from "./gym_math.js";
 import "dotenv/config";
 import { parse } from "date-fns";
 import XXH from "xxhashjs";
@@ -162,11 +162,25 @@ app.get("/api/v1/gym_interpline", async (req, res) => {
         // Calculate prediction line based on selected method
         const method = (req.query.method as string) || "closest";
         let interpLine;
-        if (method === "average") {
-            interpLine = makeAverageLine(weeks);
-        } else {
-            // Default to "closest" method
-            interpLine = makeClosestLine(weeks.slice(1), weeks[0].data);
+        const currentDayOfWeek = new Date().getDay();
+        
+        switch (method) {
+            case "average":
+                // Simple weighted average of all historical weeks
+                interpLine = makeAverageLine(weeks);
+                break;
+            case "median":
+                // Weighted average using median (more robust to outliers)
+                interpLine = makeAverageLine(weeks, true);
+                break;
+            case "dayofweek":
+                // Average only data from the same day of week
+                interpLine = makeDayOfWeekLine(weeks, currentDayOfWeek);
+                break;
+            case "closest":
+            default:
+                // Find most similar weeks and average them (default)
+                interpLine = makeClosestLine(weeks.slice(1), weeks[0].data);
         }
 
         // calculate all time high

@@ -7,8 +7,13 @@ export interface GymDataWeek {
     weight: number;
 }
 
+// Get day of week from a date string (0 = Sunday, 1 = Monday, etc.)
+function getDayOfWeek(dateStr: string): number {
+    return new Date(dateStr).getDay();
+}
+
 // This function averages multiple weeks of gym data into a single average line (with weights)
-function makeAverageLine(gym_hist: GymDataWeek[]) {
+function makeAverageLine(gym_hist: GymDataWeek[], useMedian = false) {
     let minX = new Date().setHours(6, 0, 0, 0);
     let maxX = new Date().setHours(23, 59, 59, 999);
     let historicAvg = [];
@@ -38,8 +43,9 @@ function makeAverageLine(gym_hist: GymDataWeek[]) {
     let lastVals = new Array(historicData.length).fill(0);
     for (let min = 0; min < hrs * 60; min += 5) {
         let time = +new Date(minX + min * 60 * 1000);
-        let avg = 0;
-        let count = 0;
+        let values: number[] = [];
+        let weights: number[] = [];
+        let totalWeight = 0;
         for (let w = 0; w < historicData.length; w++) {
             let week = historicData[w].data;
             let weight = historicData[w].weight;
@@ -58,28 +64,73 @@ function makeAverageLine(gym_hist: GymDataWeek[]) {
                 if (x < 0 || x > 1) {
                     console.error("x out of bounds", x);
                 } else {
-                    avg += weight * (a.auslastung + x * (b.auslastung - a.auslastung));
-                    count += weight;
+                    const value = a.auslastung + x * (b.auslastung - a.auslastung);
+                    values.push(value);
+                    weights.push(weight);
+                    totalWeight += weight;
                 }
             } else if (nextTime === 0) {
                 if (Math.abs(week[nextTime].created_at - time) < 1000 * 60 * 15) {
-                    avg += weight * week[nextTime].auslastung;
-                    count += weight;
+                    values.push(week[nextTime].auslastung);
+                    weights.push(weight);
+                    totalWeight += weight;
                 }
             } else if (nextTime === week.length) {
                 if (Math.abs(week[nextTime - 1].created_at - time) < 1000 * 60 * 15) {
-                    avg += weight * week[nextTime - 1].auslastung;
-                    count += weight;
+                    values.push(week[nextTime - 1].auslastung);
+                    weights.push(weight);
+                    totalWeight += weight;
                 }
             }
             lastVals[w] = nextTime;
         }
-        if (count > 0) {
-            avg /= count;
+        
+        let avgValue = 0;
+        if (values.length > 0) {
+            if (useMedian) {
+                // Sort values by weight-adjusted value for weighted median
+                const weightedValues = values.map((v, i) => ({ v, w: weights[i] }));
+                weightedValues.sort((a, b) => a.v - b.v);
+                // Find weighted median
+                let cumWeight = 0;
+                const halfWeight = totalWeight / 2;
+                for (const item of weightedValues) {
+                    cumWeight += item.w;
+                    if (cumWeight >= halfWeight) {
+                        avgValue = item.v;
+                        break;
+                    }
+                }
+            } else {
+                // Weighted average
+                for (let i = 0; i < values.length; i++) {
+                    avgValue += weights[i] * values[i];
+                }
+                avgValue /= totalWeight;
+            }
         }
-        historicAvg.push({ created_at: time, auslastung: avg });
+        historicAvg.push({ created_at: time, auslastung: avgValue });
     }
     return historicAvg;
+}
+
+// Average using only data from the same day of week as today
+function makeDayOfWeekLine(gym_hist: GymDataWeek[], currentDayOfWeek: number) {
+    let minX = new Date().setHours(6, 0, 0, 0);
+    let maxX = new Date().setHours(23, 59, 59, 999);
+    
+    // Filter data to only include the same day of week
+    const filteredData = gym_hist.map((week) => ({
+        data: week.data.filter((g) => getDayOfWeek(g.created_at) === currentDayOfWeek),
+        weight: week.weight,
+    })).filter((week) => week.data.length > 0);
+    
+    if (filteredData.length === 0) {
+        // Fall back to regular average if no data for this day
+        return makeAverageLine(gym_hist);
+    }
+    
+    return makeAverageLine(filteredData);
 }
 
 // First find the three most similar weeks to the current week, then average those
@@ -222,4 +273,4 @@ function makeClosestLine(gym_hist: GymDataWeek[], data_of_current_day: GymDataPi
     return makeAverageLine(closestWeeks);
 }
 
-export { makeAverageLine, makeClosestLine };
+export { makeAverageLine, makeClosestLine, makeDayOfWeekLine };
