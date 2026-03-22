@@ -324,6 +324,77 @@ function CopyStation({ str }: { str: string }) {
     );
 }
 
+function DataExportForm() {
+    const [startDate, setStartDate] = useState<string>("2026-01-01");
+    const [endDate, setEndDate] = useState<string>("2026-01-31");
+    const [format, setFormat] = useState<"csv" | "json">("csv");
+    const [error, setError] = useState<string | null>(null);
+
+    const handleExport = () => {
+        setError(null);
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const diffDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+        
+        if (diffDays > 31) {
+            setError("Date range cannot exceed 31 days");
+            return;
+        }
+        if (diffDays < 0) {
+            setError("End date must be after start date");
+            return;
+        }
+        
+        const url = `/api/v1/gym/export?start_date=${startDate}&end_date=${endDate}&format=${format}`;
+        window.open(url, "_blank");
+    };
+
+    return (
+        <div className="mt-2">
+            <div className="row g-2 align-items-end">
+                <div className="col-auto">
+                    <label className="form-label small mb-1">Start Date</label>
+                    <input
+                        type="date"
+                        className="form-control form-control-sm"
+                        value={startDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                    />
+                </div>
+                <div className="col-auto">
+                    <label className="form-label small mb-1">End Date</label>
+                    <input
+                        type="date"
+                        className="form-control form-control-sm"
+                        value={endDate}
+                        onChange={(e) => setEndDate(e.target.value)}
+                    />
+                </div>
+                <div className="col-auto">
+                    <label className="form-label small mb-1">Format</label>
+                    <select
+                        className="form-select form-select-sm"
+                        value={format}
+                        onChange={(e) => setFormat(e.target.value as "csv" | "json")}
+                    >
+                        <option value="csv">CSV</option>
+                        <option value="json">JSON</option>
+                    </select>
+                </div>
+                <div className="col-auto">
+                    <button
+                        className="btn btn-sm btn-primary"
+                        onClick={handleExport}
+                    >
+                        Download
+                    </button>
+                </div>
+            </div>
+            {error && <div className="text-warning small mt-1">{error}</div>}
+        </div>
+    );
+}
+
 function GymStuff() {
     const [embedCode, setEmbedCode] = useState<string>(EMBED_CODE("https://rwtf.dorianko.ch"));
     const [picUrl, setPicUrl] = useState<string>("https://rwtf.dorianko.ch/embed_picture.png");
@@ -399,14 +470,7 @@ function GymStuff() {
                     <h4>Export Data</h4>
                     <small>
                         Download gym utilization data for your own analysis.
-                        <br />
-                        <a href="/api/v1/gym/export?start_date=2026-01-01&end_date=2026-01-31&format=csv" className="btn btn-sm btn-outline-primary mt-2" download>
-                            Download Sample (Jan 2026, CSV)
-                        </a>
-                        <a href="/api/v1/gym/export?start_date=2026-01-01&end_date=2026-01-31&format=json" className="btn btn-sm btn-outline-secondary mt-2 ms-2" download>
-                            Download Sample (Jan 2026, JSON)
-                        </a>
-                        <br />
+                        <DataExportForm />
                         <span className="text-muted small">Max 31 days per export. Last 5 exports limited per hour.</span>
                     </small>
                 </div>
