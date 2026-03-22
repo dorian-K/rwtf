@@ -348,10 +348,32 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
     const [gymLine, setGymLine] = useState<GymInterpLineResponse>();
     const [error, setError] = useState<string>();
     const [isLoading, setIsLoading] = useState(true);
+    const [predTime, setPredTime] = useState<string>("");
 
     const days = ["Today", "Tomorrow", "+2 days", "+3 days"];
     const [dayoffset, setDayoffset] = useState(0);
     const api = useBackendContext();
+
+    // Get prediction for custom time
+    const getPredictionForTime = (timeStr: string): { time: Date | null; value: number | null } => {
+        if (!timeStr || !gymLine?.interpLine || gymLine.interpLine.length === 0) {
+            return { time: null, value: null };
+        }
+        const [hours, mins] = timeStr.split(":").map(Number);
+        const now = new Date();
+        const target = new Date(now.getTime() + dayoffset * 24 * 3600000);
+        target.setHours(hours, mins, 0, 0);
+
+        // Find closest prediction point
+        let closest = gymLine.interpLine[0];
+        let minDiff = Infinity;
+        for (const p of gymLine.interpLine) {
+            const ptTime = new Date(p.created_at);
+            const diff = Math.abs(ptTime.getTime() - target.getTime());
+            if (diff < minDiff) { minDiff = diff; closest = p; }
+        }
+        return { time: target, value: closest?.auslastung || null };
+    };
 
     const reloadData = () => {
         setIsLoading(true);
