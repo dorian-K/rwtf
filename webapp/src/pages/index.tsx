@@ -192,7 +192,7 @@ function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineR
     ];
     series = series.concat(
         historicData.map((week, index) => ({
-            name: `${index + 1} Week/s ago`,
+            name: `${index + 1} Week(s) ago`,
             data: week.map((g) => ({
                 x: g.created_at,
                 y: g.auslastung,
@@ -338,7 +338,7 @@ function GymStuff() {
             <div className="card-header">
                 RWTH Gym Utilization (
                 <a href="https://buchung.hsz.rwth-aachen.de/angebote/aktueller_zeitraum/_Auslastung.html">
-                    Datasource
+                    Data source
                 </a>
                 ,{" "}
                 <a href="https://hochschulsport.rwth-aachen.de/cms/HSZ/Sport/Sportanlagen/Sportzentrum-Koenigshuegel/~jpwb/RWTH-GYM/">
@@ -361,10 +361,7 @@ function GymStuff() {
                                 <strong>Prediction</strong>:
                             </dt>
                             <dd>
-                                Prediction of the number of people in the gym for the remainder of
-                                the day, the day, the day, based on historical data and the current
-                                trend. prediction for the current day becomes more accurate as the
-                                day progresses and more data points are available.
+                                Prediction of the number of people in the gym for the remainder of the day, based on historical data and the current trend. Prediction for the current day becomes more accurate as the day progresses and more data points are available.
                             </dd>
                             <dt>
                                 <strong>Historic Arrival</strong>:
@@ -379,9 +376,9 @@ function GymStuff() {
                                 This also usually coincides with the end of lectures.
                             </dd>
                             <dt>
-                                <strong>x Week/s ago</strong>:
+                                <strong>x Week(s) ago</strong>:
                             </dt>
-                            <dd>Data from x week/s ago.</dd>
+                            <dd>Data from x week(s) ago.</dd>
                         </dl>
                     </small>
                     <small>
@@ -390,7 +387,7 @@ function GymStuff() {
                     <hr />
                     <h4>Embed</h4>
                     <small>
-                        Embed this chart in your moodle dashboard with the following code:
+                        Embed this chart in your Moodle dashboard with the following code:
                         <CopyStation str={embedCode} />
                     </small>
                     <small>
