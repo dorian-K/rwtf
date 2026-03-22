@@ -404,7 +404,71 @@ function TrendsPage() {
             </div>
 
             {monthlyData && monthlyData.length > 0 ? (
-                <MonthlyChart data={monthlyData} />
+                <>
+                    <div className="card bg-dark shadow-lg mb-4">
+                        <div className="card-header">
+                            <h5 className="mb-0">Key Insights</h5>
+                        </div>
+                        <div className="card-body">
+                            <div className="row text-center">
+                                <div className="col-md-4 mb-3">
+                                    <h6 className="text-muted mb-2">Busiest Month</h6>
+                                    <h4 className="text-white">
+                                        {(() => {
+                                            const busiest = monthlyData!.reduce((max, m) => 
+                                                m.avg_utilization > max.avg_utilization ? m : max, monthlyData![0]);
+                                            return busiest ? busiest.month : "N/A";
+                                        })()}
+                                    </h4>
+                                    <small className="text-muted">
+                                        {(() => {
+                                            const busiest = monthlyData!.reduce((max, m) => 
+                                                m.avg_utilization > max.avg_utilization ? m : max, monthlyData![0]);
+                                            return busiest ? `${busiest.avg_utilization.toFixed(1)}% avg` : "";
+                                        })()}
+                                    </small>
+                                </div>
+                                <div className="col-md-4 mb-3">
+                                    <h6 className="text-muted mb-2">Quietest Month</h6>
+                                    <h4 className="text-white">
+                                        {(() => {
+                                            const quietest = monthlyData!.reduce((min, m) => 
+                                                m.avg_utilization < min.avg_utilization ? m : min, monthlyData![0]);
+                                            return quietest ? quietest.month : "N/A";
+                                        })()}
+                                    </h4>
+                                    <small className="text-muted">
+                                        {(() => {
+                                            const quietest = monthlyData!.reduce((min, m) => 
+                                                m.avg_utilization < min.avg_utilization ? m : min, monthlyData![0]);
+                                            return quietest ? `${quietest.avg_utilization.toFixed(1)}% avg` : "";
+                                        })()}
+                                    </small>
+                                </div>
+                                <div className="col-md-4 mb-3">
+                                    <h6 className="text-muted mb-2">Peak Hour</h6>
+                                    <h4 className="text-white">
+                                        {(() => {
+                                            if (!hourlyPattern || hourlyPattern.length === 0) return "N/A";
+                                            const peak = hourlyPattern.reduce((max, h) => 
+                                                h.avg_utilization > max.avg_utilization ? h : max, hourlyPattern[0]);
+                                            return peak ? `${peak.hour}:00` : "N/A";
+                                        })()}
+                                    </h4>
+                                    <small className="text-muted">
+                                        {(() => {
+                                            if (!hourlyPattern || hourlyPattern.length === 0) return "";
+                                            const peak = hourlyPattern.reduce((max, h) => 
+                                                h.avg_utilization > max.avg_utilization ? h : max, hourlyPattern[0]);
+                                            return peak ? `${peak.avg_utilization.toFixed(1)}% avg` : "";
+                                        })()}
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <MonthlyChart data={monthlyData} />
+                </>
             ) : (
                 <div className="alert alert-info">No monthly data available yet.</div>
             )}
