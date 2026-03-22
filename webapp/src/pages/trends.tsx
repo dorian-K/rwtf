@@ -8,7 +8,10 @@ import {
     HeatmapDataPoint,
 } from "@/api/Backend";
 
-const ReactApexChart = React.lazy(() => import("apexcharts"));
+const ReactApexChart = React.lazy(async () => {
+    const ApexCharts = (await import("apexcharts")).default;
+    return { default: ApexCharts as unknown as React.ComponentType<any> };
+}) as any;
 
 function MonthlyChart({ data }: { data: MonthlyDataPoint[] }) {
     const options: ApexOptions = {
@@ -300,20 +303,19 @@ function HeatmapChart({ data }: { data: HeatmapDataPoint[] }) {
             labels: {
                 show: true,
                 rotate: -45,
-                formatter: (val) => val,
             },
         },
         yaxis: {
             categories: dayNames,
             reversed: true,
-        },
+        } as any,
         title: {
             text: "Utilization Heatmap (Hour x Day)",
             align: "left",
         },
         tooltip: {
             y: {
-                formatter: (val) => `${val.toFixed(1)}%`,
+                formatter: (val) => `${Number(val).toFixed(1)}%`,
             },
         },
     };
@@ -580,7 +582,7 @@ function TrendsPage() {
                             <li>Monthly data shows the last 24 months of aggregated averages.</li>
                             <li>Hourly patterns are computed over the last 6 months.</li>
                             <li>Peak hours indicate when the gym is typically most crowded.</li>
-                            <li>Red zones on charts indicate high utilization (>80%).</li>
+                            <li>Red zones on charts indicate high utilization (&gt;80%).</li>
                             <li className="mt-2">
                                 <a href="/" className="btn btn-sm btn-outline-secondary">Back to Live View</a>{" "}
                                 <a href="/api/v1/gym/export?start_date=2026-01-01&end_date=2026-01-31&format=csv" className="btn btn-sm btn-outline-primary" download>Export Data (CSV)</a>
