@@ -57,7 +57,7 @@ function MonthlyChart({ data }: { data: MonthlyDataPoint[] }) {
         },
         yaxis: {
             title: {
-                text: "Avg Utilization (%)",
+                text: "Average People in Gym",
             },
             min: 0,
         },
@@ -73,14 +73,14 @@ function MonthlyChart({ data }: { data: MonthlyDataPoint[] }) {
         },
         tooltip: {
             y: {
-                formatter: (val) => `${toNumber(val).toFixed(1)}%`,
+                formatter: (val) => `${toNumber(val).toFixed(1)} people`,
             },
         },
     };
 
     const series = [
         {
-            name: "Avg Utilization",
+            name: "Average People",
             data: data.map((d) => d.avg_utilization),
         },
     ];
@@ -111,6 +111,10 @@ function MonthlyChart({ data }: { data: MonthlyDataPoint[] }) {
 }
 
 function HourlyPatternChart({ data }: { data: HourlyDataPoint[] }) {
+    const maxPeople = data.reduce((max, point) => Math.max(max, point.avg_utilization), 0);
+    const lowUpper = maxPeople * 0.33;
+    const mediumUpper = maxPeople * 0.66;
+
     const options: ApexOptions = {
         chart: {
             type: "area",
@@ -132,7 +136,7 @@ function HourlyPatternChart({ data }: { data: HourlyDataPoint[] }) {
         },
         yaxis: {
             title: {
-                text: "Avg Utilization (%)",
+                text: "Average People in Gym",
             },
             min: 0,
         },
@@ -155,12 +159,12 @@ function HourlyPatternChart({ data }: { data: HourlyDataPoint[] }) {
         annotations: {
             yaxis: [
                 {
-                    y: 160,
-                    y2: 100,
+                    y: mediumUpper,
+                    y2: maxPeople,
                     fillColor: "#FF0000",
                     opacity: 0.15,
                     label: {
-                        text: "High",
+                        text: "High Occupancy",
                         style: {
                             color: "#fff",
                             background: "#FF0000",
@@ -168,12 +172,12 @@ function HourlyPatternChart({ data }: { data: HourlyDataPoint[] }) {
                     },
                 },
                 {
-                    y: 120,
-                    y2: 80,
+                    y: lowUpper,
+                    y2: mediumUpper,
                     fillColor: "#ff8c00",
                     opacity: 0.15,
                     label: {
-                        text: "Medium",
+                        text: "Medium Occupancy",
                         style: {
                             color: "#fff",
                             background: "#ff8c00",
@@ -184,14 +188,14 @@ function HourlyPatternChart({ data }: { data: HourlyDataPoint[] }) {
         },
         tooltip: {
             y: {
-                formatter: (val) => `${toNumber(val).toFixed(1)}%`,
+                formatter: (val) => `${toNumber(val).toFixed(1)} people`,
             },
         },
     };
 
     const series = [
         {
-            name: "Avg Utilization",
+            name: "Average People",
             data: data.map((d) => d.avg_utilization),
         },
     ];
@@ -226,7 +230,7 @@ function DayOfWeekChart({ data }: { data: DayOfWeekDataPoint[] }) {
         },
         yaxis: {
             title: {
-                text: "Avg Utilization (%)",
+                text: "Average People in Gym",
             },
             min: 0,
         },
@@ -242,14 +246,14 @@ function DayOfWeekChart({ data }: { data: DayOfWeekDataPoint[] }) {
         },
         tooltip: {
             y: {
-                formatter: (val) => `${toNumber(val).toFixed(1)}%`,
+                formatter: (val) => `${toNumber(val).toFixed(1)} people`,
             },
         },
     };
 
     const series = [
         {
-            name: "Avg Utilization",
+            name: "Average People",
             data: data.map((d) => d.avg_utilization),
         },
     ];
@@ -261,6 +265,9 @@ function HeatmapChart({ data }: { data: HeatmapDataPoint[] }) {
     // Prepare data for heatmap
     const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     const hours = Array.from({ length: 24 }, (_, hour) => hour);
+    const maxPeople = data.reduce((max, point) => Math.max(max, point.avg_utilization), 0);
+    const lowUpper = maxPeople * 0.33;
+    const mediumUpper = maxPeople * 0.66;
 
     // Group by day and hour (API: day_of_week 1=Sun to 7=Sat)
     const heatmapData: { x: number; y: number | null }[][] = [];
@@ -284,9 +291,14 @@ function HeatmapChart({ data }: { data: HeatmapDataPoint[] }) {
                 radius: 2,
                 colorScale: {
                     ranges: [
-                        { from: 0, to: 40, name: "Low", color: "#00A100" },
-                        { from: 41, to: 80, name: "Medium", color: "#FF8C00" },
-                        { from: 81, to: 100, name: "High", color: "#FF0000" },
+                        { from: 0, to: lowUpper, name: "Low", color: "#00A100" },
+                        {
+                            from: lowUpper,
+                            to: mediumUpper,
+                            name: "Medium",
+                            color: "#FF8C00",
+                        },
+                        { from: mediumUpper, to: maxPeople, name: "High", color: "#FF0000" },
                     ],
                 },
             },
@@ -311,7 +323,7 @@ function HeatmapChart({ data }: { data: HeatmapDataPoint[] }) {
         },
         tooltip: {
             y: {
-                formatter: (val) => `${Number(val).toFixed(1)}%`,
+                formatter: (val) => `${Number(val).toFixed(1)} people`,
             },
         },
     };
@@ -429,7 +441,7 @@ function TrendsPage() {
     return (
         <div className="container mt-4">
             <div className="d-flex justify-content-between align-items-center mb-4">
-                <h1 className="text-white mb-0">Gym Utilization Trends</h1>
+                <h1 className="text-white mb-0">Gym Occupancy Trends</h1>
                 <small className="text-muted">Data aggregated from historical records</small>
             </div>
 
@@ -480,7 +492,7 @@ function TrendsPage() {
                                                 monthlyData![0],
                                             );
                                             return busiest
-                                                ? `${busiest.avg_utilization.toFixed(1)}% avg`
+                                                ? `${busiest.avg_utilization.toFixed(1)} avg people`
                                                 : "";
                                         })()}
                                     </small>
@@ -509,7 +521,7 @@ function TrendsPage() {
                                                 monthlyData![0],
                                             );
                                             return quietest
-                                                ? `${quietest.avg_utilization.toFixed(1)}% avg`
+                                                ? `${quietest.avg_utilization.toFixed(1)} avg people`
                                                 : "";
                                         })()}
                                     </small>
@@ -542,7 +554,7 @@ function TrendsPage() {
                                                 hourlyPattern[0],
                                             );
                                             return peak
-                                                ? `${peak.avg_utilization.toFixed(1)}% avg`
+                                                ? `${peak.avg_utilization.toFixed(1)} avg people`
                                                 : "";
                                         })()}
                                     </small>
@@ -568,7 +580,7 @@ function TrendsPage() {
                         <div className="row">
                             <div className="col-md-6">
                                 <h6 className="text-success mb-2">
-                                    🏃 Best Times (Low Utilization)
+                                    🏃 Best Times (Lower Occupancy)
                                 </h6>
                                 <ul className="list-unstyled">
                                     {heatmapData
@@ -599,14 +611,14 @@ function TrendsPage() {
                                                 <strong>
                                                     {t.day}s at {t.hour}:00
                                                 </strong>{" "}
-                                                — {t.utilization.toFixed(1)}% avg
+                                                — {t.utilization.toFixed(1)} avg people
                                             </li>
                                         ))}
                                 </ul>
                             </div>
                             <div className="col-md-6">
                                 <h6 className="text-danger mb-2">
-                                    ⚠️ Times to Avoid (High Utilization)
+                                    ⚠️ Times to Avoid (Higher Occupancy)
                                 </h6>
                                 <ul className="list-unstyled">
                                     {heatmapData
@@ -637,7 +649,7 @@ function TrendsPage() {
                                                 <strong>
                                                     {t.day}s at {t.hour}:00
                                                 </strong>{" "}
-                                                — {t.utilization.toFixed(1)}% avg
+                                                — {t.utilization.toFixed(1)} avg people
                                             </li>
                                         ))}
                                 </ul>
@@ -679,7 +691,7 @@ function TrendsPage() {
                             <li>Monthly data shows the last 24 months of aggregated averages.</li>
                             <li>Hourly patterns are computed over the last 6 months.</li>
                             <li>Peak hours indicate when the gym is typically most crowded.</li>
-                            <li>Red zones on charts indicate high utilization (&gt;80%).</li>
+                            <li>Chart values represent the average number of people in the gym.</li>
                             <li className="mt-2">
                                 <Link href="/" className="btn btn-sm btn-outline-secondary">
                                     Back to Live View
