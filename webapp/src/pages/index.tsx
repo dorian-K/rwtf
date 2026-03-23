@@ -66,7 +66,10 @@ function LiveStatusCard({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterp
     };
     const timeSlots = getTimeSlots();
 
-    // Find best time to go in next 3 hours (account for dayoffset)
+    // dayoffset: 0 = today, 1 = tomorrow (for next-day predictions)
+    const dayoffset = 0;
+
+    // Find best time to go in next 3 hours
     const getBestTime = () => {
         if (!gymLine?.interpLine || gymLine.interpLine.length === 0) return null;
         // eslint-disable-next-line react-hooks/purity
@@ -85,7 +88,7 @@ function LiveStatusCard({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterp
     };
     const bestTime = getBestTime();
 
-    // For people already at the gym: "How long until it gets crowded?" (account for dayoffset)
+    // For people already at the gym: "How long until it gets crowded?"
     const getStayDuration = () => {
         if (currentUtil === null || !gymLine?.interpLine || currentUtil > 70) return null;
         // eslint-disable-next-line react-hooks/purity
