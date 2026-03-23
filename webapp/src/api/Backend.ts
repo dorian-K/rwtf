@@ -11,7 +11,56 @@ export interface GymResponse {
 export interface GymInterpLineResponse {
     interpLine: GymDataPiece[];
     allTimeHigh: number;
+    method?: string;
 }
+
+export interface HistoryDataPoint {
+    time_bucket: string;
+    avg_utilization: number;
+    max_utilization: number;
+    min_utilization: number;
+    sample_count: number;
+}
+
+export interface MonthlyDataPoint {
+    month: string;
+    avg_utilization: number;
+    max_utilization: number;
+    min_utilization: number;
+    total_samples: number;
+    peak_hour: number | null;
+}
+
+export interface HourlyDataPoint {
+    hour: number;
+    avg_utilization: number;
+    max_utilization: number;
+    min_utilization: number;
+    sample_count: number;
+}
+
+export interface DayOfWeekDataPoint {
+    day_of_week: number;
+    avg_utilization: number;
+    sample_count: number;
+}
+
+export interface HeatmapDataPoint {
+    day_of_week: number;
+    hour: number;
+    avg_utilization: number;
+    sample_count: number;
+}
+
+export interface HourlyPatternResponse {
+    hourly: HourlyDataPoint[];
+    dayOfWeek: DayOfWeekDataPoint[];
+    heatmap: HeatmapDataPoint[];
+    queryMs: number;
+}
+
+export type PredictionMethod = "closest" | "average" | "median" | "dayofweek";
+
 
 export class Backend {
     fetch(input: string, init?: RequestInit): Promise<Response> {
@@ -39,8 +88,13 @@ export class Backend {
         return this.processResponse(this.fetch("/api/v1/gym?dayoffset=" + dayoffset));
     }
 
-    getGymInterpLine(dayoffset: number): Promise<GymInterpLineResponse> {
-        return this.processResponse(this.fetch("/api/v1/gym_interpline?dayoffset=" + dayoffset));
+    getGymInterpLine(
+        dayoffset: number,
+        method: PredictionMethod = "closest",
+    ): Promise<GymInterpLineResponse> {
+        return this.processResponse(
+            this.fetch("/api/v1/gym_interpline?dayoffset=" + dayoffset + "&method=" + method),
+        );
     }
 
     isAachener(): Promise<boolean> {
@@ -51,5 +105,31 @@ export class Backend {
 
     getStudyUrl(url: string): string {
         return `/api/v1/study?url=${url}`;
+    }
+
+    getGymHistory(
+        startDate: string,
+        endDate: string,
+        aggregation: string = "day",
+    ): Promise<{
+        data: HistoryDataPoint[];
+        aggregation: string;
+        startDate: string;
+        endDate: string;
+        queryMs: number;
+    }> {
+        return this.processResponse(
+            this.fetch(
+                `/api/v1/gym/history?start_date=${startDate}&end_date=${endDate}&aggregation=${aggregation}`,
+            ),
+        );
+    }
+
+    getGymMonthly(): Promise<{ data: MonthlyDataPoint[]; queryMs: number }> {
+        return this.processResponse(this.fetch("/api/v1/gym/monthly"));
+    }
+
+    getGymHourlyPattern(): Promise<HourlyPatternResponse> {
+        return this.processResponse(this.fetch("/api/v1/gym/hourly-pattern"));
     }
 }

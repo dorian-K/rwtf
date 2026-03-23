@@ -1,13 +1,22 @@
-import { GymInterpLineResponse, GymResponse } from "@/api/Backend";
+import { GymInterpLineResponse, GymResponse, PredictionMethod } from "@/api/Backend";
 import { useBackendContext } from "@/components/BackendProvider";
 import { ApexOptions } from "apexcharts";
 import React from "react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { EMBED_CODE } from "./embed_gym";
 
 const ReactApexChart = React.lazy(() => import("react-apexcharts"));
 
 function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineResponse }) {
+    const methodName = gymLine.method
+        ? {
+              closest: "Similar Weeks",
+              average: "Simple Average",
+              median: "Robust Average",
+              dayofweek: "Same Weekday",
+          }[gymLine.method] || "Prediction"
+        : "Prediction";
     let todayReference;
     if (gym.data_today.length > 0) {
         todayReference = new Date(gym.data_today[0].created_at);
@@ -172,7 +181,7 @@ function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineR
             })),
         },
         {
-            name: "Prediction",
+            name: methodName,
             data: gymLine.interpLine.map((g) => {
                 const gDate = new Date(g.created_at);
                 return {
@@ -221,11 +230,18 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
 
     const days = ["Today", "Tomorrow", "+2 days", "+3 days"];
     const [dayoffset, setDayoffset] = useState(0);
+    const methods: { value: PredictionMethod; label: string; desc: string }[] = [
+        { value: "closest", label: "Similar Weeks", desc: "Finds weeks with similar patterns" },
+        { value: "average", label: "Simple Average", desc: "Average of all past weeks" },
+        { value: "median", label: "Robust Average", desc: "Ignores outliers" },
+        { value: "dayofweek", label: "Same Weekday", desc: "Only uses same day of week" },
+    ];
+    const [method, setMethod] = useState<PredictionMethod>("closest");
     const api = useBackendContext();
 
     const reloadData = () => {
         setIsLoading(true);
-        const prom = Promise.all([api.getGym(dayoffset), api.getGymInterpLine(dayoffset)]);
+        const prom = Promise.all([api.getGym(dayoffset), api.getGymInterpLine(dayoffset, method)]);
         prom.then((res) => {
             setGym(res[0]);
             setGymLine(res[1]);
@@ -255,7 +271,7 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
             clearInterval(tim);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [api, dayoffset]);
+    }, [api, dayoffset, method]);
 
     return (
         <>
@@ -265,7 +281,7 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
             </div>
 
             {hideHandles === false && (
-                <div className="d-flex mt-3 ">
+                <div className="d-flex mt-3 flex-wrap gap-2">
                     <button
                         className="btn btn-primary me-2"
                         onClick={reloadData}
@@ -286,6 +302,24 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
                                 {d}
                             </button>
                         ))}
+                    </div>
+                    <div className="input-group" style={{ maxWidth: "250px" }}>
+                        <label className="input-group-text" htmlFor="methodSelect">
+                            Prediction:
+                        </label>
+                        <select
+                            className="form-select"
+                            id="methodSelect"
+                            value={method}
+                            onChange={(e) => setMethod(e.target.value as PredictionMethod)}
+                            title={methods.find((m) => m.value === method)?.desc}
+                        >
+                            {methods.map((m) => (
+                                <option key={m.value} value={m.value} title={m.desc}>
+                                    {m.label}
+                                </option>
+                            ))}
+                        </select>
                     </div>
                     {isLoading && <div className="spinner-border"></div>}
                 </div>
@@ -499,6 +533,7 @@ function GymStuff() {
                     </small>
                     <small>
                         This Website is <a href="https://github.com/dorian-K/rwtf">open-source</a>!
+                        | <Link href="/trends">View Historical Trends</Link>
                     </small>
                     <hr />
                     <h4>Embed</h4>
