@@ -11,9 +11,8 @@ export interface GymResponse {
 export interface GymInterpLineResponse {
     interpLine: GymDataPiece[];
     allTimeHigh: number;
+    method?: string;
 }
-
-export type PredictionMethod = "closest" | "average";
 
 export interface HistoryDataPoint {
     time_bucket: string;
@@ -60,6 +59,9 @@ export interface HourlyPatternResponse {
     queryMs: number;
 }
 
+export type PredictionMethod = "closest" | "average" | "median" | "dayofweek";
+
+
 export class Backend {
     fetch(input: string, init?: RequestInit): Promise<Response> {
         return fetch(input, init);
@@ -86,8 +88,13 @@ export class Backend {
         return this.processResponse(this.fetch("/api/v1/gym?dayoffset=" + dayoffset));
     }
 
-    getGymInterpLine(dayoffset: number): Promise<GymInterpLineResponse> {
-        return this.processResponse(this.fetch("/api/v1/gym_interpline?dayoffset=" + dayoffset));
+    getGymInterpLine(
+        dayoffset: number,
+        method: PredictionMethod = "closest",
+    ): Promise<GymInterpLineResponse> {
+        return this.processResponse(
+            this.fetch("/api/v1/gym_interpline?dayoffset=" + dayoffset + "&method=" + method),
+        );
     }
 
     isAachener(): Promise<boolean> {
