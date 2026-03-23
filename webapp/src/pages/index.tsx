@@ -2,6 +2,7 @@ import { GymInterpLineResponse, GymResponse, PredictionMethod } from "@/api/Back
 import { useBackendContext } from "@/components/BackendProvider";
 import { ApexOptions } from "apexcharts";
 import React from "react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { EMBED_CODE } from "./embed_gym";
 
@@ -420,6 +421,7 @@ function GymStuff() {
                     </small>
                     <small>
                         This Website is <a href="https://github.com/dorian-K/rwtf">open-source</a>!
+                        | <Link href="/trends">View Historical Trends</Link>
                     </small>
                     <hr />
                     <h4>Embed</h4>
