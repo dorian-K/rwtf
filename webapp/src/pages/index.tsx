@@ -1,7 +1,8 @@
-import { GymInterpLineResponse, GymResponse } from "@/api/Backend";
+import { GymInterpLineResponse, GymResponse, PredictionMethod } from "@/api/Backend";
 import { useBackendContext } from "@/components/BackendProvider";
 import { ApexOptions } from "apexcharts";
 import React from "react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { EMBED_CODE } from "./embed_gym";
 
@@ -171,6 +172,14 @@ function LiveStatusCard({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterp
 }
 
 function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineResponse }) {
+    const methodName = gymLine.method
+        ? {
+              closest: "Similar Weeks ⭐",
+              average: "Simple Average",
+              median: "Robust Average",
+              dayofweek: "Same Weekday",
+          }[gymLine.method] || "Prediction"
+        : "Prediction";
     let todayReference;
     if (gym.data_today.length > 0) {
         todayReference = new Date(gym.data_today[0].created_at);
@@ -335,7 +344,7 @@ function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineR
             })),
         },
         {
-            name: "Prediction",
+            name: methodName,
             data: gymLine.interpLine.map((g) => {
                 const gDate = new Date(g.created_at);
                 return {
@@ -385,6 +394,33 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
 
     const days = ["Today", "Tomorrow", "+2 days", "+3 days"];
     const [dayoffset, setDayoffset] = useState(0);
+    const methods: { value: PredictionMethod; label: string; shortDesc: string; fullDesc: string }[] = [
+        {
+            value: "closest",
+            label: "Similar Weeks ⭐",
+            shortDesc: "Finds weeks with similar patterns",
+            fullDesc: "Finds historical weeks with a similar crowd pattern to today and averages them. Captures both the day-of-week effect AND unusual events (e.g., holidays). Most accurate when past weeks had clear, consistent patterns.",
+        },
+        {
+            value: "average",
+            label: "Simple Average",
+            shortDesc: "Weighted average of all past weeks",
+            fullDesc: "A weighted average of all historical weeks. Recent weeks count 3x more than older ones. Smooths out noise but can be skewed by unusually crowded or empty weeks.",
+        },
+        {
+            value: "median",
+            label: "Robust Average",
+            shortDesc: "Median-based, ignores outliers",
+            fullDesc: "Like Simple Average but uses median instead of mean. Extreme values (packed or empty weeks) have less influence. More stable when data contains unusual weeks.",
+        },
+        {
+            value: "dayofweek",
+            label: "Same Weekday",
+            shortDesc: "Only uses data from the same day of week",
+            fullDesc: "Only looks at data from the same day of week (e.g., all Mondays). Best for capturing the regular weekly rhythm. Ignores longer-term trends and anomalies.",
+        },
+    ];
+    const [method, setMethod] = useState<PredictionMethod>("closest");
     const api = useBackendContext();
 
     // Get prediction for custom time
@@ -413,7 +449,7 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
 
     const reloadData = () => {
         setIsLoading(true);
-        const prom = Promise.all([api.getGym(dayoffset), api.getGymInterpLine(dayoffset)]);
+        const prom = Promise.all([api.getGym(dayoffset), api.getGymInterpLine(dayoffset, method)]);
         prom.then((res) => {
             setGym(res[0]);
             setGymLine(res[1]);
@@ -443,7 +479,7 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
             clearInterval(tim);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [api, dayoffset]);
+    }, [api, dayoffset, method]);
 
     return (
         <>
@@ -454,7 +490,7 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
             </div>
 
             {hideHandles === false && (
-                <div className="d-flex mt-3 ">
+                <div className="d-flex mt-3 flex-wrap gap-2">
                     <button
                         className="btn btn-primary me-2"
                         onClick={reloadData}
@@ -476,6 +512,30 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
                             </button>
                         ))}
                     </div>
+                    <div className="input-group" style={{ maxWidth: "400px" }}>
+                        <label className="input-group-text" htmlFor="methodSelect">
+                            Prediction:
+                        </label>
+                        <select
+                            className="form-select"
+                            id="methodSelect"
+                            value={method}
+                            onChange={(e) => setMethod(e.target.value as PredictionMethod)}
+                            title={methods.find((m) => m.value === method)?.fullDesc}
+                        >
+                            {methods.map((m) => (
+                                <option key={m.value} value={m.value} title={m.fullDesc}>
+                                    {m.label}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                    {method === "closest" && (
+                        <small className="text-muted ms-2 mt-1">
+                            <span className="badge bg-success me-1">Recommended</span>
+                            Best overall accuracy for regular gym usage.
+                        </small>
+                    )}
                     <div className="input-group" style={{ maxWidth: "180px", marginLeft: "8px" }}>
                         <label className="input-group-text" htmlFor="predTime">
                             Predict for:
@@ -612,6 +672,7 @@ function GymStuff() {
                     </small>
                     <small>
                         This Website is <a href="https://github.com/dorian-K/rwtf">open-source</a>!
+                        | <Link href="/trends">View Historical Trends</Link>
                     </small>
                     <hr />
                     <h4>Embed</h4>

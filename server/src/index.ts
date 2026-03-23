@@ -5,7 +5,7 @@ import { PoolConnection } from "mariadb";
 import { SAMPLE } from "./sample_data.js";
 import { downloadStreamFile, isAachener } from "./study.js";
 import { rateLimit } from "express-rate-limit";
-import { GymDataWeek, makeAverageLine, makeClosestLine } from "./gym_math.js";
+import { GymDataWeek, makeAverageLine, makeClosestLine, makeDayOfWeekLine } from "./gym_math.js";
 import "dotenv/config";
 import { parse } from "date-fns";
 import XXH from "xxhashjs";
@@ -13,6 +13,13 @@ import stringify from "json-stable-stringify";
 
 const app = express();
 app.set("trust proxy", ["loopback", "linklocal", "uniquelocal"]);
+app.set("json replacer", (_key: string, value: unknown) => {
+    if (typeof value === "bigint") {
+        const asNumber = Number(value);
+        return Number.isSafeInteger(asNumber) ? asNumber : value.toString();
+    }
+    return value;
+});
 
 const limiter_burst = rateLimit({
     windowMs: 5 * 1000, // 20 reqs / 5 seconds
@@ -159,8 +166,32 @@ app.get("/api/v1/gym_interpline", async (req, res) => {
                 weight: i <= 4 ? 3 : 1, // prefer recent weeks more heavily
             });
         }
-        //const interpLine = makeAverageLine(weeks);
-        const interpLine = makeClosestLine(weeks.slice(1), weeks[0].data);
+        // Calculate prediction line based on selected method
+        const methodParam = (req.query.method as string) || "closest";
+        const validMethods = ["closest", "average", "median", "dayofweek"];
+        const method = validMethods.includes(methodParam) ? methodParam : "closest";
+        let interpLine;
+        const targetDate = new Date(Date.now() + dayoffset * 24 * 3600000);
+        const currentDayOfWeek = targetDate.getDay();
+        
+        switch (method) {
+            case "average":
+                // Simple weighted average of all historical weeks
+                interpLine = makeAverageLine(weeks);
+                break;
+            case "median":
+                // Weighted average using median (more robust to outliers)
+                interpLine = makeAverageLine(weeks, true);
+                break;
+            case "dayofweek":
+                // Average only data from the same day of week
+                interpLine = makeDayOfWeekLine(weeks, currentDayOfWeek);
+                break;
+            case "closest":
+            default:
+                // Find most similar weeks to current week (excluding current week itself) and average them
+                interpLine = makeClosestLine(weeks.slice(1), weeks[0].data);
+        }
 
         // calculate all time high
         let allTimeHigh = await conn.query(
@@ -182,6 +213,7 @@ app.get("/api/v1/gym_interpline", async (req, res) => {
             interpLine: interpLine,
             queryMs: queryMs,
             allTimeHigh: allTimeHigh,
+            method: method,
         });
     } catch (err) {
         console.error(err);
@@ -359,6 +391,223 @@ app.get("/api/v1/is_aachen", async (req, res) => {
         res.json({ status: true, ip: req.ip });
     } else {
         res.json({ status: false, ip: req.ip });
+    }
+});
+
+// Historical trends endpoints
+
+// GET /api/v1/gym/history - aggregated historical data
+// Query params: start_date, end_date, aggregation (hour/day/week/month)
+app.get("/api/v1/gym/history", async (req, res) => {
+    const startDateStr = req.query.start_date as string;
+    const endDateStr = req.query.end_date as string;
+    const aggregation = (req.query.aggregation as string) || "day";
+
+    if (!startDateStr || !endDateStr) {
+        res.status(400).json({ error: true, msg: "start_date and end_date are required" });
+        return;
+    }
+
+    const startDate = new Date(startDateStr);
+    const endDate = new Date(endDateStr);
+
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+        res.status(400).json({ error: true, msg: "Invalid date format" });
+        return;
+    }
+
+    // Limit to 1 year max to protect database
+    const maxRangeMs = 365 * 24 * 60 * 60 * 1000;
+    if (endDate.getTime() - startDate.getTime() > maxRangeMs) {
+        res.status(400).json({ error: true, msg: "Date range cannot exceed 1 year" });
+        return;
+    }
+
+    // Determine date truncation based on aggregation
+    let dateFormat: string;
+    switch (aggregation) {
+        case "hour":
+            dateFormat = "%Y-%m-%d %H:00";
+            break;
+        case "week":
+            dateFormat = "%Y-%u"; // ISO week
+            break;
+        case "month":
+            dateFormat = "%Y-%m";
+            break;
+        case "day":
+        default:
+            dateFormat = "%Y-%m-%d";
+    }
+
+    let conn;
+    try {
+        conn = await getConnection();
+        const startTime = new Date();
+
+        // Using DATE_FORMAT for grouping - works with both MySQL and MariaDB
+        const rows = await conn.query(
+            `SELECT 
+                DATE_FORMAT(created_at, ?) as time_bucket,
+                AVG(auslastung) as avg_utilization,
+                MAX(auslastung) as max_utilization,
+                MIN(auslastung) as min_utilization,
+                COUNT(*) as sample_count
+            FROM rwth_gym 
+            WHERE created_at >= ? AND created_at <= ?
+            GROUP BY time_bucket
+            ORDER BY time_bucket`,
+            [dateFormat, startDate, endDate]
+        );
+
+        let queryMs = new Date().getTime() - startTime.getTime();
+
+        res.setHeader("Cache-Control", "public, max-age=3600"); // 1 hour cache
+        res.setHeader("Server-Timing", `db;dur=${queryMs}`);
+        res.json({
+            data: rows,
+            aggregation: aggregation,
+            startDate: startDateStr,
+            endDate: endDateStr,
+            queryMs: queryMs,
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: true });
+    } finally {
+        if (conn) conn.end();
+    }
+});
+
+// GET /api/v1/gym/monthly - monthly aggregates
+app.get("/api/v1/gym/monthly", async (req, res) => {
+    let conn;
+    try {
+        conn = await getConnection();
+        const startTime = new Date();
+
+        // Get monthly aggregates for the last 24 months
+        const rows = await conn.query(
+            `SELECT 
+                DATE_FORMAT(created_at, '%Y-%m') as month,
+                AVG(auslastung) as avg_utilization,
+                MAX(auslastung) as max_utilization,
+                MIN(auslastung) as min_utilization,
+                COUNT(*) as sample_count
+            FROM rwth_gym 
+            WHERE created_at >= DATE_SUB(NOW(), INTERVAL 24 MONTH)
+            GROUP BY month
+            ORDER BY month`
+        );
+
+        // Also get peak hour for each month
+        const peakHours = await conn.query(
+            `SELECT 
+                DATE_FORMAT(created_at, '%Y-%m') as month,
+                HOUR(created_at) as hour,
+                AVG(auslastung) as avg_utilization
+            FROM rwth_gym 
+            WHERE created_at >= DATE_SUB(NOW(), INTERVAL 24 MONTH)
+            GROUP BY month, hour
+            ORDER BY month, avg_utilization DESC`
+        );
+
+        // For each month, find the hour with highest average utilization
+        const peakHoursMap: Record<string, number> = {};
+        for (const row of peakHours) {
+            const month = row.month;
+            if (!(month in peakHoursMap)) {
+                peakHoursMap[month] = row.hour;
+            }
+        }
+
+        // Combine data
+        const result = rows.map((row: any) => ({
+            month: row.month,
+            avg_utilization: Math.round(row.avg_utilization * 100) / 100,
+            max_utilization: row.max_utilization,
+            min_utilization: row.min_utilization,
+            total_samples: row.sample_count,
+            peak_hour: peakHoursMap[row.month] !== undefined ? peakHoursMap[row.month] : null,
+        }));
+
+        let queryMs = new Date().getTime() - startTime.getTime();
+
+        res.setHeader("Cache-Control", "public, max-age=86400"); // 24 hour cache
+        res.setHeader("Server-Timing", `db;dur=${queryMs}`);
+        res.json({
+            data: result,
+            queryMs: queryMs,
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: true });
+    } finally {
+        if (conn) conn.end();
+    }
+});
+
+// GET /api/v1/gym/hourly-pattern - typical patterns by hour
+app.get("/api/v1/gym/hourly-pattern", async (req, res) => {
+    let conn;
+    try {
+        conn = await getConnection();
+        const startTime = new Date();
+
+        // Get average utilization by hour of day (aggregated across all days)
+        const rows = await conn.query(
+            `SELECT 
+                HOUR(created_at) as hour,
+                AVG(auslastung) as avg_utilization,
+                MAX(auslastung) as max_utilization,
+                MIN(auslastung) as min_utilization,
+                COUNT(*) as sample_count
+            FROM rwth_gym 
+            WHERE created_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+            GROUP BY hour
+            ORDER BY hour`
+        );
+
+        // Also get day-of-week patterns
+        const dayOfWeekRows = await conn.query(
+            `SELECT 
+                DAYOFWEEK(created_at) as day_of_week,
+                AVG(auslastung) as avg_utilization,
+                COUNT(*) as sample_count
+            FROM rwth_gym 
+            WHERE created_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+            GROUP BY day_of_week
+            ORDER BY day_of_week`
+        );
+
+        // And hour x day-of-week heatmap data
+        const heatmapRows = await conn.query(
+            `SELECT 
+                DAYOFWEEK(created_at) as day_of_week,
+                HOUR(created_at) as hour,
+                AVG(auslastung) as avg_utilization,
+                COUNT(*) as sample_count
+            FROM rwth_gym 
+            WHERE created_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+            GROUP BY day_of_week, hour
+            ORDER BY day_of_week, hour`
+        );
+
+        let queryMs = new Date().getTime() - startTime.getTime();
+
+        res.setHeader("Cache-Control", "public, max-age=86400"); // 24 hour cache
+        res.setHeader("Server-Timing", `db;dur=${queryMs}`);
+        res.json({
+            hourly: rows,
+            dayOfWeek: dayOfWeekRows,
+            heatmap: heatmapRows,
+            queryMs: queryMs,
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: true });
+    } finally {
+        if (conn) conn.end();
     }
 });
 
