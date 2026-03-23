@@ -15,6 +15,15 @@ const ReactApexChart = lazy(() =>
     })),
 );
 
+function toNumber(value: unknown): number {
+    if (typeof value === "number") return value;
+    if (typeof value === "string") {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : 0;
+    }
+    return 0;
+}
+
 function MonthlyChart({ data }: { data: MonthlyDataPoint[] }) {
     const options: ApexOptions = {
         chart: {
@@ -64,7 +73,7 @@ function MonthlyChart({ data }: { data: MonthlyDataPoint[] }) {
         },
         tooltip: {
             y: {
-                formatter: (val) => `${val.toFixed(1)}%`,
+                formatter: (val) => `${toNumber(val).toFixed(1)}%`,
             },
         },
     };
@@ -175,7 +184,7 @@ function HourlyPatternChart({ data }: { data: HourlyDataPoint[] }) {
         },
         tooltip: {
             y: {
-                formatter: (val) => `${val.toFixed(1)}%`,
+                formatter: (val) => `${toNumber(val).toFixed(1)}%`,
             },
         },
     };
@@ -233,7 +242,7 @@ function DayOfWeekChart({ data }: { data: DayOfWeekDataPoint[] }) {
         },
         tooltip: {
             y: {
-                formatter: (val) => `${val.toFixed(1)}%`,
+                formatter: (val) => `${toNumber(val).toFixed(1)}%`,
             },
         },
     };
@@ -251,6 +260,7 @@ function DayOfWeekChart({ data }: { data: DayOfWeekDataPoint[] }) {
 function HeatmapChart({ data }: { data: HeatmapDataPoint[] }) {
     // Prepare data for heatmap
     const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const hours = Array.from({ length: 24 }, (_, hour) => hour);
 
     // Group by day and hour (API: day_of_week 1=Sun to 7=Sat)
     const heatmapData: { x: number; y: number | null }[][] = [];
@@ -344,10 +354,43 @@ function TrendsPage() {
                     api.getGymMonthly(),
                     api.getGymHourlyPattern(),
                 ]);
-                setMonthlyData(monthly.data);
-                setHourlyPattern(hourly.hourly);
-                setDayOfWeekData(hourly.dayOfWeek);
-                setHeatmapData(hourly.heatmap);
+                setMonthlyData(
+                    monthly.data.map((item) => ({
+                        ...item,
+                        avg_utilization: toNumber(item.avg_utilization),
+                        max_utilization: toNumber(item.max_utilization),
+                        min_utilization: toNumber(item.min_utilization),
+                        total_samples: toNumber(item.total_samples),
+                        peak_hour: item.peak_hour === null ? null : toNumber(item.peak_hour),
+                    })),
+                );
+                setHourlyPattern(
+                    hourly.hourly.map((item) => ({
+                        ...item,
+                        hour: toNumber(item.hour),
+                        avg_utilization: toNumber(item.avg_utilization),
+                        max_utilization: toNumber(item.max_utilization),
+                        min_utilization: toNumber(item.min_utilization),
+                        sample_count: toNumber(item.sample_count),
+                    })),
+                );
+                setDayOfWeekData(
+                    hourly.dayOfWeek.map((item) => ({
+                        ...item,
+                        day_of_week: toNumber(item.day_of_week),
+                        avg_utilization: toNumber(item.avg_utilization),
+                        sample_count: toNumber(item.sample_count),
+                    })),
+                );
+                setHeatmapData(
+                    hourly.heatmap.map((item) => ({
+                        ...item,
+                        day_of_week: toNumber(item.day_of_week),
+                        hour: toNumber(item.hour),
+                        avg_utilization: toNumber(item.avg_utilization),
+                        sample_count: toNumber(item.sample_count),
+                    })),
+                );
                 setError(null);
             } catch (err) {
                 console.error("Failed to fetch trends data:", err);

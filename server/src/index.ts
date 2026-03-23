@@ -13,6 +13,13 @@ import stringify from "json-stable-stringify";
 
 const app = express();
 app.set("trust proxy", ["loopback", "linklocal", "uniquelocal"]);
+app.set("json replacer", (_key: string, value: unknown) => {
+    if (typeof value === "bigint") {
+        const asNumber = Number(value);
+        return Number.isSafeInteger(asNumber) ? asNumber : value.toString();
+    }
+    return value;
+});
 
 const limiter_burst = rateLimit({
     windowMs: 5 * 1000, // 20 reqs / 5 seconds
