@@ -5,7 +5,7 @@ import { PoolConnection } from "mariadb";
 import { SAMPLE } from "./sample_data.js";
 import { downloadStreamFile, isAachener } from "./study.js";
 import { rateLimit } from "express-rate-limit";
-import { GymDataWeek, makeAverageLine, makeClosestLine } from "./gym_math.js";
+import { GymDataWeek, makeAverageLine, makeClosestLine, makeDayOfWeekLine } from "./gym_math.js";
 import "dotenv/config";
 import { parse } from "date-fns";
 import XXH from "xxhashjs";
@@ -159,8 +159,32 @@ app.get("/api/v1/gym_interpline", async (req, res) => {
                 weight: i <= 4 ? 3 : 1, // prefer recent weeks more heavily
             });
         }
-        //const interpLine = makeAverageLine(weeks);
-        const interpLine = makeClosestLine(weeks.slice(1), weeks[0].data);
+        // Calculate prediction line based on selected method
+        const methodParam = (req.query.method as string) || "closest";
+        const validMethods = ["closest", "average", "median", "dayofweek"];
+        const method = validMethods.includes(methodParam) ? methodParam : "closest";
+        let interpLine;
+        const targetDate = new Date(Date.now() + dayoffset * 24 * 3600000);
+        const currentDayOfWeek = targetDate.getDay();
+        
+        switch (method) {
+            case "average":
+                // Simple weighted average of all historical weeks
+                interpLine = makeAverageLine(weeks);
+                break;
+            case "median":
+                // Weighted average using median (more robust to outliers)
+                interpLine = makeAverageLine(weeks, true);
+                break;
+            case "dayofweek":
+                // Average only data from the same day of week
+                interpLine = makeDayOfWeekLine(weeks, currentDayOfWeek);
+                break;
+            case "closest":
+            default:
+                // Find most similar weeks to current week (excluding current week itself) and average them
+                interpLine = makeClosestLine(weeks.slice(1), weeks[0].data);
+        }
 
         // calculate all time high
         let allTimeHigh = await conn.query(
@@ -182,6 +206,7 @@ app.get("/api/v1/gym_interpline", async (req, res) => {
             interpLine: interpLine,
             queryMs: queryMs,
             allTimeHigh: allTimeHigh,
+            method: method,
         });
     } catch (err) {
         console.error(err);
