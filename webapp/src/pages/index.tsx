@@ -8,7 +8,7 @@ import { EMBED_CODE } from "./embed_gym";
 
 const ReactApexChart = React.lazy(() => import("react-apexcharts"));
 
-function LiveStatusCard({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineResponse }) {
+function LiveStatusCard({ gym, gymLine, dayoffset }: { gym: GymResponse; gymLine: GymInterpLineResponse; dayoffset: number }) {
     // Current utilization — sort by timestamp to ensure we get the latest point
     const latestDataPoint =
         gym.data_today.length > 0
@@ -493,7 +493,7 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
     return (
         <>
             {error && <div className="alert alert-danger">{error}</div>}
-            {gym && gymLine && <LiveStatusCard gym={gym} gymLine={gymLine} />}
+            {gym && gymLine && <LiveStatusCard gym={gym} gymLine={gymLine} dayoffset={dayoffset} />}
             <div style={{ height: "500px" }}>
                 {gym && gymLine && <ChartImpl gym={gym} gymLine={gymLine} />}
             </div>
