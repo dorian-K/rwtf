@@ -6,7 +6,8 @@
         "outDir": "./dist", // Specify the output directory for compiled files
         "strict": true, // Enable strict type-checking
         "esModuleInterop": true, // Enable compatibility with CommonJS modules
-        "sourceMap": true // Generate source maps for better debugging
+        "sourceMap": true, // Generate source maps for better debugging
+        "skipLibCheck": true // Skip library type checking to avoid external module errors
     },
     "include": [
         "src/**/*.ts",

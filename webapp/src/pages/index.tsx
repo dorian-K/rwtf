@@ -397,9 +397,9 @@ function DataExportForm() {
         const end = new Date(endDate);
         const diffDays = Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
-        // Backend limit: 2000 days (~5.5 years)
-        if (diffDays > 2000) {
-            setError("Date range cannot exceed 2000 days");
+        // Backend limit: 31 days
+        if (diffDays > 31) {
+            setError("Date range cannot exceed 31 days");
             return;
         }
         if (diffDays < 0) {

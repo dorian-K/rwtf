@@ -415,6 +415,10 @@ app.get("/api/v1/gym/export", limiterExport, async (req, res) => {
         return;
     }
 
+    // Sanitize date strings for use in Content-Disposition header
+    const safeStartDate = startDateStr.replace(/[^a-zA-Z0-9-]/g, "_");
+    const safeEndDate = endDateStr.replace(/[^a-zA-Z0-9-]/g, "_");
+
     const startDate = new Date(startDateStr);
     const endDate = new Date(endDateStr);
 
@@ -423,15 +427,15 @@ app.get("/api/v1/gym/export", limiterExport, async (req, res) => {
         return;
     }
 
-    // Limit to 2000 days (~5.5 years) max
-    const maxRangeMs = 2000 * 24 * 60 * 60 * 1000; // ~5.5 years
+    // Limit to 31 days max
+    const maxRangeMs = 31 * 24 * 60 * 60 * 1000; // ~31 days
     const rangeMs = endDate.getTime() - startDate.getTime();
     if (rangeMs > maxRangeMs || rangeMs < 0) {
-        res.status(400).json({ error: true, msg: "Date range cannot exceed 2000 days" });
+        res.status(400).json({ error: true, msg: "Date range cannot exceed 31 days" });
         return;
     }
 
-    const MAX_ROWS = 200000; // Increased for "all data" export (covers ~2000 days at 15-min intervals)
+    const MAX_ROWS = 10000; // Max rows for export
     let conn;
     try {
         conn = await getConnection();
@@ -455,7 +459,8 @@ app.get("/api/v1/gym/export", limiterExport, async (req, res) => {
 
         if (format === "json") {
             res.setHeader("Content-Type", "application/json");
-            res.setHeader("Content-Disposition", `attachment; filename="gym_data_${startDateStr}_${endDateStr}.json"`);
+            res.setHeader("Content-Disposition", `attachment; filename="gym_data_${safeStartDate}_${safeEndDate}.json"`);
+            res.setHeader("Cache-Control", "no-store");
             res.json({
                 data: rows.map((r: any) => ({
                     timestamp: (r.created_at as Date).toISOString(),
@@ -472,7 +477,7 @@ app.get("/api/v1/gym/export", limiterExport, async (req, res) => {
         } else {
             // CSV format
             res.setHeader("Content-Type", "text/csv");
-            res.setHeader("Content-Disposition", `attachment; filename="gym_data_${startDateStr}_${endDateStr}.csv"`);
+            res.setHeader("Content-Disposition", `attachment; filename="gym_data_${safeStartDate}_${safeEndDate}.csv"`);
             res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
             res.setHeader("Pragma", "no-cache");
 
