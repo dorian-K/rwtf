@@ -329,7 +329,7 @@ function DayOfWeekChart({ data }: { data: DayOfWeekDataPoint[] }) {
         },
     ];
 
-    return <ReactApexChart type="bar" options={options} series={series} height={250} />;
+    return <ReactApexChart type="bar" options={options} series={series} height={300} />;
 }
 
 function HeatmapChart({ data }: { data: HeatmapDataPoint[] }) {

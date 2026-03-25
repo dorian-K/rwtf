@@ -1,6 +1,6 @@
 import { GymInterpLineResponse, GymResponse, PredictionMethod } from "@/api/Backend";
 import { useBackendContext } from "@/components/BackendProvider";
-import { ApexOptions } from "apexcharts";
+import { ApexAxisChartSeries, ApexOptions } from "apexcharts";
 import React from "react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
