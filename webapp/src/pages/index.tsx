@@ -58,6 +58,10 @@ function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineR
 
     let minX = new Date(todayReference).setHours(6, 0, 0, 0);
     let maxX = new Date(todayReference).setHours(23, 59, 59, 999);
+    const currentTimestamp = new Intl.DateTimeFormat("de-DE", {
+        dateStyle: "medium",
+        timeStyle: "short",
+    }).format(new Date());
 
     const options: ApexOptions = {
         yaxis: {
@@ -90,7 +94,7 @@ function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineR
             dashArray: [0, 1, 1].concat(new Array(historicData.length).fill(3)),
         },
         title: {
-            text: "RWTH Gym Utilization",
+            text: `RWTH Gym Utilization · ${currentTimestamp}`,
             align: "left",
         },
         theme: {
@@ -177,6 +181,7 @@ function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineR
             zIndex: 1,
             data: data.map((g) => ({
                 x: g.created_at,
+                // Absolute number of people currently in the gym, not a percentage value.
                 y: g.auslastung,
             })),
         },
@@ -420,13 +425,21 @@ function GymStuff() {
                 <GymPlotWithHandles />
                 <div className="mt-2">
                     <hr />
+                    <div className="mb-3">
+                        <Link href="/trends" className="btn btn-primary">
+                            View Historical Trends
+                        </Link>
+                    </div>
                     <h4>Legend</h4>
                     <small>
                         <dl>
                             <dt>
                                 <strong>Utilization</strong>:
                             </dt>
-                            <dd>Number of people in the gym as reported by HSZ.</dd>
+                            <dd>
+                                Absolute number of people in the gym as reported by HSZ, not a
+                                percentage.
+                            </dd>
                             <dt>
                                 <strong>Prediction</strong>:
                             </dt>
@@ -456,7 +469,6 @@ function GymStuff() {
                     </small>
                     <small>
                         This Website is <a href="https://github.com/dorian-K/rwtf">open-source</a>!
-                        | <Link href="/trends">View Historical Trends</Link>
                     </small>
                     <hr />
                     <h4>Embed</h4>
