@@ -9,6 +9,7 @@ import {
     HeatmapDataPoint,
     HistoryDataPoint,
 } from "@/api/Backend";
+import { interpolateHsl } from "d3-interpolate";
 
 const ReactApexChart = lazy(() =>
     import("react-apexcharts").then((m) => ({
@@ -40,17 +41,25 @@ function monFirstToDayOfWeek(monFirstIndex: number): number {
     return monFirstIndex === 6 ? 1 : monFirstIndex + 2;
 }
 
+const heatmapColorInterpolator = interpolateHsl("#28a745", "#dc3545");
+
+function getHeatmapColor(value: number, maxValue: number): string {
+    if (maxValue <= 0 || value === null || value === undefined || isNaN(value)) {
+        return "#000000";
+    }
+
+    const normalized = Math.max(0, Math.min(1, value / maxValue));
+    return heatmapColorInterpolator(normalized);
+}
+
 function WeeklyLineChart({ data }: { data: HistoryDataPoint[] }) {
     const options: ApexOptions = {
         chart: {
-            type: "line",
+            type: "area",
             height: 300,
+            foreColor: "#ffffff",
             toolbar: { show: true },
             zoom: { enabled: true },
-        },
-        stroke: {
-            curve: "smooth",
-            width: 2,
         },
         dataLabels: { enabled: false },
         xaxis: {
@@ -59,20 +68,25 @@ function WeeklyLineChart({ data }: { data: HistoryDataPoint[] }) {
                 rotate: -45,
                 rotateAlways: true,
             },
-            type: "datetime",
+            type: "category",
         },
         yaxis: {
             title: { text: "Average People in Gym" },
             min: 0,
+            decimalsInFloat: 0,
         },
         fill: {
             type: "gradient",
             gradient: {
                 shadeIntensity: 1,
-                opacityFrom: 0.4,
-                opacityTo: 0.1,
+                opacityFrom: 0.7,
+                opacityTo: 0.2,
                 stops: [0, 90, 100],
             },
+        },
+        stroke: {
+            curve: "smooth",
+            width: 3,
         },
         title: {
             text: "Weekly Average Gym Utilization (Last 104 Weeks)",
@@ -83,7 +97,11 @@ function WeeklyLineChart({ data }: { data: HistoryDataPoint[] }) {
             x: { show: true },
             y: { formatter: (val) => `${toNumber(val).toFixed(1)} people` },
         },
-        markers: { size: 0 },
+        legend: {
+            labels: {
+                colors: "#ffffff",
+            },
+        },
     };
 
     const series = [
@@ -102,7 +120,7 @@ function WeeklyLineChart({ data }: { data: HistoryDataPoint[] }) {
                 <Suspense
                     fallback={<div className="text-center text-muted py-4">Loading chart...</div>}
                 >
-                    <ReactApexChart type="line" options={options} series={series} height={300} />
+                    <ReactApexChart type="area" options={options} series={series} height={300} />
                 </Suspense>
             </div>
         </div>
@@ -139,6 +157,7 @@ function MonthlyChart({ data }: { data: MonthlyDataPoint[] }) {
         yaxis: {
             title: { text: "Average People in Gym" },
             min: 0,
+            decimalsInFloat: 0,
         },
         fill: { opacity: 1 },
         title: {
@@ -206,6 +225,7 @@ function HourlyPatternChart({ data }: { data: HourlyDataPoint[] }) {
         yaxis: {
             title: { text: "Average People in Gym" },
             min: 0,
+            decimalsInFloat: 0,
         },
         fill: {
             type: "gradient",
@@ -289,6 +309,7 @@ function DayOfWeekChart({ data }: { data: DayOfWeekDataPoint[] }) {
         yaxis: {
             title: { text: "Average People in Gym" },
             min: 0,
+            decimalsInFloat: 0,
         },
         fill: { opacity: 1 },
         title: {
@@ -314,6 +335,7 @@ function DayOfWeekChart({ data }: { data: DayOfWeekDataPoint[] }) {
 function HeatmapChart({ data }: { data: HeatmapDataPoint[] }) {
     const hours = Array.from({ length: 24 }, (_, hour) => hour);
     const maxPeople = data.reduce((max, point) => Math.max(max, point.avg_utilization), 0);
+    const heatmapMax = maxPeople > 0 ? maxPeople : 1;
 
     // Build heatmap data with Monday-first ordering
     const heatmapData: { x: number; y: number | null }[][] = [];
@@ -333,14 +355,24 @@ function HeatmapChart({ data }: { data: HeatmapDataPoint[] }) {
             type: "heatmap",
             height: 350,
         },
+        theme: { mode: "dark" },
         plotOptions: {
             heatmap: {
                 radius: 2,
-                // Continuous color scale instead of discrete ranges
                 colorScale: {
-                    ranges: [],
+                    inverse: false,
                     min: 0,
-                    max: maxPeople,
+                    max: heatmapMax,
+                    ranges: Array.from({ length: 100 }, (_, index) => {
+                        const from = (heatmapMax * index) / 100;
+                        const to = (heatmapMax * (index + 1)) / 100;
+
+                        return {
+                            from,
+                            to,
+                            color: getHeatmapColor((from + to) / 2, heatmapMax),
+                        };
+                    }),
                 },
             },
         },
@@ -358,7 +390,15 @@ function HeatmapChart({ data }: { data: HeatmapDataPoint[] }) {
             align: "left",
         },
         tooltip: {
-            y: { formatter: (val) => `${Number(val).toFixed(1)} people` },
+            y: {
+                formatter: (val) =>
+                    val === null || val === undefined
+                        ? "No data"
+                        : `${toNumber(val).toFixed(1)} people`,
+            },
+        },
+        legend: {
+            show: false,
         },
     };
 
@@ -624,7 +664,7 @@ function TrendsPage() {
 
             {weeklyData && weeklyData.length > 0 && <WeeklyLineChart data={weeklyData} />}
 
-            {heatmapData && heatmapData.length > 0 && (
+            {false && heatmapData && heatmapData.length > 0 && (
                 <div className="card bg-dark shadow-lg mb-4">
                     <div className="card-header">
                         <h5 className="mb-0">When to Go</h5>
@@ -643,9 +683,7 @@ function TrendsPage() {
                                         // Filter: only well-sampled times, exclude closed hours (0-5am)
                                         .filter(
                                             (d) =>
-                                                d.sample_count > 10 &&
-                                                d.hour >= 6 &&
-                                                d.hour <= 23,
+                                                d.sample_count > 10 && d.hour >= 6 && d.hour <= 23,
                                         )
                                         .sort((a, b) => a.avg_utilization - b.avg_utilization)
                                         .slice(0, 3)
@@ -660,7 +698,9 @@ function TrendsPage() {
                                                 "Sunday",
                                             ];
                                             // Convert API day_of_week (1=Sun..7=Sat) to Monday-first index
-                                            const displayDayIndex = dayOfWeekToMonFirst(d.day_of_week);
+                                            const displayDayIndex = dayOfWeekToMonFirst(
+                                                d.day_of_week,
+                                            );
                                             return {
                                                 day: dayNames[displayDayIndex],
                                                 hour: d.hour,
@@ -687,9 +727,7 @@ function TrendsPage() {
                                         // Filter: only well-sampled times, exclude closed hours
                                         .filter(
                                             (d) =>
-                                                d.sample_count > 10 &&
-                                                d.hour >= 6 &&
-                                                d.hour <= 23,
+                                                d.sample_count > 10 && d.hour >= 6 && d.hour <= 23,
                                         )
                                         .sort((a, b) => b.avg_utilization - a.avg_utilization)
                                         .slice(0, 3)
@@ -703,7 +741,9 @@ function TrendsPage() {
                                                 "Saturday",
                                                 "Sunday",
                                             ];
-                                            const displayDayIndex = dayOfWeekToMonFirst(d.day_of_week);
+                                            const displayDayIndex = dayOfWeekToMonFirst(
+                                                d.day_of_week,
+                                            );
                                             return {
                                                 day: dayNames[displayDayIndex],
                                                 hour: d.hour,
@@ -756,7 +796,10 @@ function TrendsPage() {
                     <small>
                         <ul className="mb-0">
                             <li>Data is collected every 5 minutes from the HSZ booking system.</li>
-                            <li>Weekly data shows the last ~104 weeks (2 years) of aggregated averages.</li>
+                            <li>
+                                Weekly data shows the last ~104 weeks (2 years) of aggregated
+                                averages.
+                            </li>
                             <li>Monthly data shows the last 24 months of aggregated averages.</li>
                             <li>Hourly patterns are computed over the last 6 months.</li>
                             <li>Peak hours indicate when the gym is typically most crowded.</li>
