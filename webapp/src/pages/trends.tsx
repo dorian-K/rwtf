@@ -7,6 +7,7 @@ import {
     HourlyDataPoint,
     DayOfWeekDataPoint,
     HeatmapDataPoint,
+    HistoryDataPoint,
 } from "@/api/Backend";
 
 const ReactApexChart = lazy(() =>
@@ -24,14 +25,96 @@ function toNumber(value: unknown): number {
     return 0;
 }
 
+// Days of week ordered Monday-first (ISO standard)
+const DAY_NAMES_MON_FIRST = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+// Convert API day_of_week (1=Sun..7=Sat) to Monday-first index (0=Mon..6=Sun)
+function dayOfWeekToMonFirst(apiDay: number): number {
+    // 1=Sun -> 6, 2=Mon -> 0, 3=Tue -> 1, ..., 7=Sat -> 5
+    return apiDay === 1 ? 6 : apiDay - 2;
+}
+
+// Convert Monday-first index (0=Mon..6=Sun) to API day_of_week (1=Sun..7=Sat)
+function monFirstToDayOfWeek(monFirstIndex: number): number {
+    // 0 -> 2 (Mon), 1 -> 3 (Tue), ..., 5 -> 7 (Sat), 6 -> 1 (Sun)
+    return monFirstIndex === 6 ? 1 : monFirstIndex + 2;
+}
+
+function WeeklyLineChart({ data }: { data: HistoryDataPoint[] }) {
+    const options: ApexOptions = {
+        chart: {
+            type: "line",
+            height: 300,
+            toolbar: { show: true },
+            zoom: { enabled: true },
+        },
+        stroke: {
+            curve: "smooth",
+            width: 2,
+        },
+        dataLabels: { enabled: false },
+        xaxis: {
+            categories: data.map((d) => d.time_bucket),
+            labels: {
+                rotate: -45,
+                rotateAlways: true,
+            },
+            type: "datetime",
+        },
+        yaxis: {
+            title: { text: "Average People in Gym" },
+            min: 0,
+        },
+        fill: {
+            type: "gradient",
+            gradient: {
+                shadeIntensity: 1,
+                opacityFrom: 0.4,
+                opacityTo: 0.1,
+                stops: [0, 90, 100],
+            },
+        },
+        title: {
+            text: "Weekly Average Gym Utilization (Last 104 Weeks)",
+            align: "left",
+        },
+        theme: { mode: "dark" },
+        tooltip: {
+            x: { show: true },
+            y: { formatter: (val) => `${toNumber(val).toFixed(1)} people` },
+        },
+        markers: { size: 0 },
+    };
+
+    const series = [
+        {
+            name: "Weekly Average",
+            data: data.map((d) => d.avg_utilization),
+        },
+    ];
+
+    return (
+        <div className="card bg-dark shadow-lg mb-4">
+            <div className="card-header">
+                <h5 className="mb-0">Weekly Trend</h5>
+            </div>
+            <div className="card-body">
+                <Suspense
+                    fallback={<div className="text-center text-muted py-4">Loading chart...</div>}
+                >
+                    <ReactApexChart type="line" options={options} series={series} height={300} />
+                </Suspense>
+            </div>
+        </div>
+    );
+}
+
 function MonthlyChart({ data }: { data: MonthlyDataPoint[] }) {
     const options: ApexOptions = {
         chart: {
             type: "bar",
             height: 350,
-            toolbar: {
-                show: true,
-            },
+            toolbar: { show: true },
         },
         plotOptions: {
             bar: {
@@ -40,9 +123,7 @@ function MonthlyChart({ data }: { data: MonthlyDataPoint[] }) {
                 borderRadius: 4,
             },
         },
-        dataLabels: {
-            enabled: false,
-        },
+        dataLabels: { enabled: false },
         stroke: {
             show: true,
             width: 2,
@@ -56,25 +137,17 @@ function MonthlyChart({ data }: { data: MonthlyDataPoint[] }) {
             },
         },
         yaxis: {
-            title: {
-                text: "Average People in Gym",
-            },
+            title: { text: "Average People in Gym" },
             min: 0,
         },
-        fill: {
-            opacity: 1,
-        },
+        fill: { opacity: 1 },
         title: {
             text: "Monthly Average Gym Utilization",
             align: "left",
         },
-        theme: {
-            mode: "dark",
-        },
+        theme: { mode: "dark" },
         tooltip: {
-            y: {
-                formatter: (val) => `${toNumber(val).toFixed(1)} people`,
-            },
+            y: { formatter: (val) => `${toNumber(val).toFixed(1)} people` },
         },
     };
 
@@ -119,25 +192,19 @@ function HourlyPatternChart({ data }: { data: HourlyDataPoint[] }) {
         chart: {
             type: "area",
             height: 300,
-            toolbar: {
-                show: true,
-            },
+            toolbar: { show: true },
         },
         stroke: {
             curve: "smooth",
             width: 3,
         },
-        dataLabels: {
-            enabled: false,
-        },
+        dataLabels: { enabled: false },
         xaxis: {
             categories: data.map((d) => `${d.hour}:00`),
             tickPlacement: "on",
         },
         yaxis: {
-            title: {
-                text: "Average People in Gym",
-            },
+            title: { text: "Average People in Gym" },
             min: 0,
         },
         fill: {
@@ -153,9 +220,7 @@ function HourlyPatternChart({ data }: { data: HourlyDataPoint[] }) {
             text: "Typical Hourly Pattern (Last 6 Months)",
             align: "left",
         },
-        theme: {
-            mode: "dark",
-        },
+        theme: { mode: "dark" },
         annotations: {
             yaxis: [
                 {
@@ -165,10 +230,7 @@ function HourlyPatternChart({ data }: { data: HourlyDataPoint[] }) {
                     opacity: 0.15,
                     label: {
                         text: "High Occupancy",
-                        style: {
-                            color: "#fff",
-                            background: "#FF0000",
-                        },
+                        style: { color: "#fff", background: "#FF0000" },
                     },
                 },
                 {
@@ -178,18 +240,13 @@ function HourlyPatternChart({ data }: { data: HourlyDataPoint[] }) {
                     opacity: 0.15,
                     label: {
                         text: "Medium Occupancy",
-                        style: {
-                            color: "#fff",
-                            background: "#ff8c00",
-                        },
+                        style: { color: "#fff", background: "#ff8c00" },
                     },
                 },
             ],
         },
         tooltip: {
-            y: {
-                formatter: (val) => `${toNumber(val).toFixed(1)} people`,
-            },
+            y: { formatter: (val) => `${toNumber(val).toFixed(1)} people` },
         },
     };
 
@@ -208,7 +265,10 @@ function HourlyPatternChart({ data }: { data: HourlyDataPoint[] }) {
 }
 
 function DayOfWeekChart({ data }: { data: DayOfWeekDataPoint[] }) {
-    const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    // Sort data so Monday is first, Sunday is last
+    const sorted = [...data].sort((a, b) => {
+        return dayOfWeekToMonFirst(a.day_of_week) - dayOfWeekToMonFirst(b.day_of_week);
+    });
 
     const options: ApexOptions = {
         chart: {
@@ -222,39 +282,29 @@ function DayOfWeekChart({ data }: { data: DayOfWeekDataPoint[] }) {
                 borderRadius: 4,
             },
         },
-        dataLabels: {
-            enabled: false,
-        },
+        dataLabels: { enabled: false },
         xaxis: {
-            categories: data.map((d) => dayNames[d.day_of_week - 1] || `Day ${d.day_of_week}`),
+            categories: sorted.map((d) => DAY_NAMES_MON_FIRST[dayOfWeekToMonFirst(d.day_of_week)]),
         },
         yaxis: {
-            title: {
-                text: "Average People in Gym",
-            },
+            title: { text: "Average People in Gym" },
             min: 0,
         },
-        fill: {
-            opacity: 1,
-        },
+        fill: { opacity: 1 },
         title: {
             text: "Day of Week Pattern",
             align: "left",
         },
-        theme: {
-            mode: "dark",
-        },
+        theme: { mode: "dark" },
         tooltip: {
-            y: {
-                formatter: (val) => `${toNumber(val).toFixed(1)} people`,
-            },
+            y: { formatter: (val) => `${toNumber(val).toFixed(1)} people` },
         },
     };
 
     const series = [
         {
             name: "Average People",
-            data: data.map((d) => d.avg_utilization),
+            data: sorted.map((d) => d.avg_utilization),
         },
     ];
 
@@ -262,20 +312,17 @@ function DayOfWeekChart({ data }: { data: DayOfWeekDataPoint[] }) {
 }
 
 function HeatmapChart({ data }: { data: HeatmapDataPoint[] }) {
-    // Prepare data for heatmap
-    const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     const hours = Array.from({ length: 24 }, (_, hour) => hour);
     const maxPeople = data.reduce((max, point) => Math.max(max, point.avg_utilization), 0);
-    const lowUpper = maxPeople * 0.33;
-    const mediumUpper = maxPeople * 0.66;
 
-    // Group by day and hour (API: day_of_week 1=Sun to 7=Sat)
+    // Build heatmap data with Monday-first ordering
     const heatmapData: { x: number; y: number | null }[][] = [];
-    for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
+    for (let displayDay = 0; displayDay < 7; displayDay++) {
         const row: { x: number; y: number | null }[] = [];
         for (let hour = 0; hour < 24; hour++) {
-            // API day_of_week: 1=Sun through 7=Sat
-            const point = data.find((d) => d.day_of_week === dayIndex + 1 && d.hour === hour);
+            // Convert Monday-first display index to API day_of_week (1=Sun..7=Sat)
+            const apiDay = monFirstToDayOfWeek(displayDay);
+            const point = data.find((d) => d.day_of_week === apiDay && d.hour === hour);
             row.push({ x: hour, y: point ? point.avg_utilization : null });
         }
         heatmapData.push(row);
@@ -289,32 +336,21 @@ function HeatmapChart({ data }: { data: HeatmapDataPoint[] }) {
         plotOptions: {
             heatmap: {
                 radius: 2,
+                // Continuous color scale instead of discrete ranges
                 colorScale: {
-                    ranges: [
-                        { from: 0, to: lowUpper, name: "Low", color: "#00A100" },
-                        {
-                            from: lowUpper,
-                            to: mediumUpper,
-                            name: "Medium",
-                            color: "#FF8C00",
-                        },
-                        { from: mediumUpper, to: maxPeople, name: "High", color: "#FF0000" },
-                    ],
+                    ranges: [],
+                    min: 0,
+                    max: maxPeople,
                 },
             },
         },
-        dataLabels: {
-            enabled: false,
-        },
+        dataLabels: { enabled: false },
         xaxis: {
             categories: hours.map((h) => `${h}:00`),
-            labels: {
-                show: true,
-                rotate: -45,
-            },
+            labels: { show: true, rotate: -45 },
         },
         yaxis: {
-            categories: dayNames,
+            categories: DAY_NAMES_MON_FIRST,
             reversed: true,
         } as any,
         title: {
@@ -322,13 +358,11 @@ function HeatmapChart({ data }: { data: HeatmapDataPoint[] }) {
             align: "left",
         },
         tooltip: {
-            y: {
-                formatter: (val) => `${Number(val).toFixed(1)} people`,
-            },
+            y: { formatter: (val) => `${Number(val).toFixed(1)} people` },
         },
     };
 
-    const series = dayNames.map((day, dayIndex) => ({
+    const series = DAY_NAMES_MON_FIRST.map((day, dayIndex) => ({
         name: day,
         data: heatmapData[dayIndex],
     }));
@@ -355,6 +389,7 @@ function TrendsPage() {
     const [hourlyPattern, setHourlyPattern] = useState<HourlyDataPoint[] | null>(null);
     const [dayOfWeekData, setDayOfWeekData] = useState<DayOfWeekDataPoint[] | null>(null);
     const [heatmapData, setHeatmapData] = useState<HeatmapDataPoint[] | null>(null);
+    const [weeklyData, setWeeklyData] = useState<HistoryDataPoint[] | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -362,10 +397,22 @@ function TrendsPage() {
         const fetchData = async () => {
             try {
                 setLoading(true);
-                const [monthly, hourly] = await Promise.all([
+
+                // Fetch weekly history (last ~104 weeks = 2 years)
+                const endDate = new Date();
+                const startDate = new Date();
+                startDate.setDate(startDate.getDate() - 730); // ~2 years
+
+                const [monthly, hourly, weekly] = await Promise.all([
                     api.getGymMonthly(),
                     api.getGymHourlyPattern(),
+                    api.getGymHistory(
+                        startDate.toISOString().split("T")[0],
+                        endDate.toISOString().split("T")[0],
+                        "week",
+                    ),
                 ]);
+
                 setMonthlyData(
                     monthly.data.map((item) => ({
                         ...item,
@@ -400,6 +447,15 @@ function TrendsPage() {
                         day_of_week: toNumber(item.day_of_week),
                         hour: toNumber(item.hour),
                         avg_utilization: toNumber(item.avg_utilization),
+                        sample_count: toNumber(item.sample_count),
+                    })),
+                );
+                setWeeklyData(
+                    weekly.data.map((item) => ({
+                        ...item,
+                        avg_utilization: toNumber(item.avg_utilization),
+                        max_utilization: toNumber(item.max_utilization),
+                        min_utilization: toNumber(item.min_utilization),
                         sample_count: toNumber(item.sample_count),
                     })),
                 );
@@ -460,7 +516,7 @@ function TrendsPage() {
                 </button>
             </div>
 
-            {monthlyData && monthlyData.length > 0 ? (
+            {monthlyData && monthlyData.length > 0 && (
                 <>
                     <div className="card bg-dark shadow-lg mb-4">
                         <div className="card-header">
@@ -564,9 +620,9 @@ function TrendsPage() {
                     </div>
                     <MonthlyChart data={monthlyData} />
                 </>
-            ) : (
-                <div className="alert alert-info">No monthly data available yet.</div>
             )}
+
+            {weeklyData && weeklyData.length > 0 && <WeeklyLineChart data={weeklyData} />}
 
             {heatmapData && heatmapData.length > 0 && (
                 <div className="card bg-dark shadow-lg mb-4">
@@ -584,23 +640,29 @@ function TrendsPage() {
                                 </h6>
                                 <ul className="list-unstyled">
                                     {heatmapData
-                                        .filter((d) => d.sample_count > 10) // Only consider well-sampled times
+                                        // Filter: only well-sampled times, exclude closed hours (0-5am)
+                                        .filter(
+                                            (d) =>
+                                                d.sample_count > 10 &&
+                                                d.hour >= 6 &&
+                                                d.hour <= 23,
+                                        )
                                         .sort((a, b) => a.avg_utilization - b.avg_utilization)
                                         .slice(0, 3)
                                         .map((d) => {
                                             const dayNames = [
-                                                "Sunday",
                                                 "Monday",
                                                 "Tuesday",
                                                 "Wednesday",
                                                 "Thursday",
                                                 "Friday",
                                                 "Saturday",
+                                                "Sunday",
                                             ];
+                                            // Convert API day_of_week (1=Sun..7=Sat) to Monday-first index
+                                            const displayDayIndex = dayOfWeekToMonFirst(d.day_of_week);
                                             return {
-                                                day:
-                                                    dayNames[d.day_of_week - 1] ||
-                                                    `Day ${d.day_of_week}`,
+                                                day: dayNames[displayDayIndex],
                                                 hour: d.hour,
                                                 utilization: d.avg_utilization,
                                             };
@@ -622,23 +684,28 @@ function TrendsPage() {
                                 </h6>
                                 <ul className="list-unstyled">
                                     {heatmapData
-                                        .filter((d) => d.sample_count > 10)
+                                        // Filter: only well-sampled times, exclude closed hours
+                                        .filter(
+                                            (d) =>
+                                                d.sample_count > 10 &&
+                                                d.hour >= 6 &&
+                                                d.hour <= 23,
+                                        )
                                         .sort((a, b) => b.avg_utilization - a.avg_utilization)
                                         .slice(0, 3)
                                         .map((d) => {
                                             const dayNames = [
-                                                "Sunday",
                                                 "Monday",
                                                 "Tuesday",
                                                 "Wednesday",
                                                 "Thursday",
                                                 "Friday",
                                                 "Saturday",
+                                                "Sunday",
                                             ];
+                                            const displayDayIndex = dayOfWeekToMonFirst(d.day_of_week);
                                             return {
-                                                day:
-                                                    dayNames[d.day_of_week - 1] ||
-                                                    `Day ${d.day_of_week}`,
+                                                day: dayNames[displayDayIndex],
                                                 hour: d.hour,
                                                 utilization: d.avg_utilization,
                                             };
@@ -656,7 +723,8 @@ function TrendsPage() {
                             </div>
                         </div>
                         <small className="text-muted">
-                            Based on last 6 months of data. Only shows times with sufficient data.
+                            Based on last 6 months of data. Only shows times with sufficient data
+                            and during opening hours (6am–midnight).
                         </small>
                     </div>
                 </div>
@@ -688,6 +756,7 @@ function TrendsPage() {
                     <small>
                         <ul className="mb-0">
                             <li>Data is collected every 5 minutes from the HSZ booking system.</li>
+                            <li>Weekly data shows the last ~104 weeks (2 years) of aggregated averages.</li>
                             <li>Monthly data shows the last 24 months of aggregated averages.</li>
                             <li>Hourly patterns are computed over the last 6 months.</li>
                             <li>Peak hours indicate when the gym is typically most crowded.</li>
