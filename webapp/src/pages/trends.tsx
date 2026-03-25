@@ -293,7 +293,7 @@ function DayOfWeekChart({ data }: { data: DayOfWeekDataPoint[] }) {
     const options: ApexOptions = {
         chart: {
             type: "bar",
-            height: 250,
+            height: 300,
         },
         plotOptions: {
             bar: {
