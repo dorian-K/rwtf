@@ -664,7 +664,7 @@ function TrendsPage() {
 
             {weeklyData && weeklyData.length > 0 && <WeeklyLineChart data={weeklyData} />}
 
-            {false && heatmapData && heatmapData.length > 0 && (
+            {/*heatmapData && heatmapData.length > 0 && (
                 <div className="card bg-dark shadow-lg mb-4">
                     <div className="card-header">
                         <h5 className="mb-0">When to Go</h5>
@@ -768,7 +768,7 @@ function TrendsPage() {
                         </small>
                     </div>
                 </div>
-            )}
+            )*/}
 
             <div className="card bg-dark shadow-lg mb-4">
                 <div className="card-header">
