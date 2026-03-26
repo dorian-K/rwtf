@@ -1,6 +1,6 @@
 import { GymInterpLineResponse, GymResponse, PredictionMethod } from "@/api/Backend";
 import { useBackendContext } from "@/components/BackendProvider";
-import { ApexAxisChartSeries, ApexOptions } from "apexcharts";
+import { ApexOptions } from "apexcharts";
 import React from "react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -175,7 +175,7 @@ function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineR
     }
     //smoothedArrivals.push(historicArrivals[historicArrivals.length - 1]);
 
-    let series: ApexAxisChartSeries = [
+    let series: ApexOptions["series"] = [
         {
             name: "Utilization",
             zIndex: 1,
