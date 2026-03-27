@@ -61,7 +61,6 @@ export interface HourlyPatternResponse {
 
 export type PredictionMethod = "closest" | "average" | "median" | "dayofweek";
 
-
 export class Backend {
     fetch(input: string, init?: RequestInit): Promise<Response> {
         return fetch(input, init);
