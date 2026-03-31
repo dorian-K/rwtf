@@ -407,34 +407,35 @@ function DataExportForm() {
         return `${year}-${month}-${day}`;
     };
 
-    const getLastYear = () => {
+    // Parse YYYY-MM-DD as local midnight (avoids JS treating it as UTC)
+    const parseLocalDate = (str: string): Date => {
+        const [year, month, day] = str.split("-").map(Number);
+        return new Date(year, month - 1, day, 0, 0, 0, 0);
+    };
+
+    const getLastDays = (days: number) => {
         const d = new Date(today);
-        d.setFullYear(d.getFullYear() - 1);
+        d.setDate(d.getDate() - days);
         return d;
     };
 
-    const [startDate, setStartDate] = useState<string>(formatDate(getLastYear()));
+    const [startDate, setStartDate] = useState<string>(formatDate(getLastDays(7)));
     const [endDate, setEndDate] = useState<string>(formatDate(today));
     const [format, setFormat] = useState<"csv" | "json">("csv");
     const [error, setError] = useState<string | null>(null);
 
-    const setPresetRange = (preset: "lastYear" | "allData") => {
+    const setPresetRange = (days: number) => {
         const end = new Date();
         const start = new Date();
-        if (preset === "lastYear") {
-            start.setFullYear(start.getFullYear() - 1);
-        } else {
-            // allData
-            start.setFullYear(2020, 0, 1); // Jan 1, 2020
-        }
+        start.setDate(end.getDate() - days);
         setStartDate(formatDate(start));
         setEndDate(formatDate(end));
     };
 
     const handleExport = () => {
         setError(null);
-        const start = new Date(startDate);
-        const end = new Date(endDate);
+        const start = parseLocalDate(startDate);
+        const end = parseLocalDate(endDate);
         const diffDays = Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
         // Backend limit: 31 days
@@ -457,16 +458,23 @@ function DataExportForm() {
                 <button
                     type="button"
                     className="btn btn-outline-secondary"
-                    onClick={() => setPresetRange("lastYear")}
+                    onClick={() => setPresetRange(7)}
                 >
-                    Last year
+                    Last 7 days
                 </button>
                 <button
                     type="button"
                     className="btn btn-outline-secondary"
-                    onClick={() => setPresetRange("allData")}
+                    onClick={() => setPresetRange(14)}
                 >
-                    All data
+                    Last 14 days
+                </button>
+                <button
+                    type="button"
+                    className="btn btn-outline-secondary"
+                    onClick={() => setPresetRange(30)}
+                >
+                    Last 30 days
                 </button>
             </div>
             <div className="row g-2 align-items-end">

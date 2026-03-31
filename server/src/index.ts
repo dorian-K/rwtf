@@ -408,99 +408,111 @@ app.get("/api/v1/gym/export", limiterExport, async (req, res) => {
     const startDateStr = req.query.start_date as string;
     const endDateStr = req.query.end_date as string;
     const formatParam = (req.query.format as string) || "csv";
-    const format = formatParam === "json" ? "json" : "csv"; // Default to CSV, only allow csv or json
+    const format = (formatParam === "json" || formatParam === "csv") ? formatParam : "csv";
 
     if (!startDateStr || !endDateStr) {
         res.status(400).json({ error: true, msg: "start_date and end_date are required" });
         return;
     }
 
-    // Sanitize date strings for use in Content-Disposition header
-    const safeStartDate = startDateStr.replace(/[^a-zA-Z0-9-]/g, "_");
-    const safeEndDate = endDateStr.replace(/[^a-zA-Z0-9-]/g, "_");
+    // Validate date format (YYYY-MM-DD)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(startDateStr) || !/^\d{4}-\d{2}-\d{2}$/.test(endDateStr)) {
+        res.status(400).json({ error: true, msg: "Invalid date format. Use YYYY-MM-DD." });
+        return;
+    }
 
-    const startDate = new Date(startDateStr);
-    const endDate = new Date(endDateStr);
+    // Parse as local midnight (avoid UTC interpretation of YYYY-MM-DD)
+    const parseLocalDate = (str: string): Date => {
+        const [year, month, day] = str.split("-").map(Number);
+        return new Date(year, month - 1, day, 0, 0, 0, 0);
+    };
+
+    const startDate = parseLocalDate(startDateStr);
+    const endDate = parseLocalDate(endDateStr);
+    // End of end date in local time (23:59:59.999)
+    const endOfEndDate = new Date(endDate.getTime() + 24 * 60 * 60 * 1000 - 1);
 
     if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
         res.status(400).json({ error: true, msg: "Invalid date format" });
         return;
     }
 
-    // Limit to 31 days max
-    const maxRangeMs = 31 * 24 * 60 * 60 * 1000; // ~31 days
+    // Limit to 31 days max (per PR specification)
+    const maxRangeMs = 31 * 24 * 60 * 60 * 1000;
     const rangeMs = endDate.getTime() - startDate.getTime();
     if (rangeMs > maxRangeMs || rangeMs < 0) {
         res.status(400).json({ error: true, msg: "Date range cannot exceed 31 days" });
         return;
     }
 
-    const MAX_ROWS = 10000; // Max rows for export
-
-    // Helper to format timestamps consistently
-    const formatTimestamp = (value: any): string => {
-        if (value instanceof Date) {
-            return value.toISOString();
-        }
-        const d = new Date(value);
-        return isNaN(d.getTime()) ? String(value) : d.toISOString();
-    };
-
+    // Safety limit: 10,000 data points per request (per PR specification)
+    const MAX_ROWS = 10000;
     let conn;
     try {
         conn = await getConnection();
 
+        // Query with LIMIT MAX_ROWS + 1 to detect overflow without extra COUNT query
         const rows = await conn.query(
             `SELECT auslastung, created_at
             FROM rwth_gym
             WHERE created_at >= ? AND created_at <= ?
             ORDER BY created_at
             LIMIT ?`,
-            [startDate, endDate, MAX_ROWS]
+            [startDate, endOfEndDate, MAX_ROWS + 1]
         );
 
-        // Check if we're hitting the limit
-        const countResult = await conn.query(
-            `SELECT COUNT(*) as count FROM rwth_gym WHERE created_at >= ? AND created_at <= ?`,
-            [startDate, endDate]
-        );
-        const totalCount = countResult[0]?.count || 0;
-        const truncated = totalCount > MAX_ROWS;
+        const hasMore = rows.length > MAX_ROWS;
+        const exportRows = hasMore ? rows.slice(0, MAX_ROWS) : rows;
+
+        if (hasMore) {
+            res.status(400).json({
+                error: true,
+                msg: `Export limit exceeded. Maximum 10,000 data points per request. Please narrow your date range.`,
+            });
+            conn.end();
+            return;
+        }
+
+        // Helper to format timestamps as ISO strings regardless of input type
+        const formatTimestamp = (value: any): string => {
+            if (value instanceof Date) return value.toISOString();
+            const d = new Date(value);
+            return isNaN(d.getTime()) ? String(value) : d.toISOString();
+        };
+
+        // Build Content-Disposition from validated, clean date strings
+        res.setHeader("Content-Disposition", `attachment; filename="gym_data_${startDateStr}_${endDateStr}.${format}"`);
+        res.setHeader("Cache-Control", "no-store");
+        res.setHeader("Pragma", "no-cache");
 
         if (format === "json") {
             res.setHeader("Content-Type", "application/json");
-            res.setHeader("Content-Disposition", `attachment; filename="gym_data_${safeStartDate}_${safeEndDate}.json"`);
-            res.setHeader("Cache-Control", "no-store");
             res.json({
-                data: rows.map((r: any) => ({
+                data: exportRows.map((r: any) => ({
                     timestamp: formatTimestamp(r.created_at),
                     utilization: r.auslastung,
                 })),
                 metadata: {
                     start_date: startDateStr,
                     end_date: endDateStr,
-                    total_samples: rows.length,
-                    truncated: truncated,
-                    total_available: totalCount,
+                    total_samples: exportRows.length,
                 },
             });
         } else {
-            // CSV format
+            // CSV format — strictly two-column, no injected comment lines
             res.setHeader("Content-Type", "text/csv");
-            res.setHeader("Content-Disposition", `attachment; filename="gym_data_${safeStartDate}_${safeEndDate}.csv"`);
-            res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-            res.setHeader("Pragma", "no-cache");
+            res.setHeader("X-Data-Truncated", "false");
 
-            // Build CSV content
-            let csv = "timestamp,utilization\n";
-            for (const row of rows) {
-                csv += `${formatTimestamp(row.created_at)},${row.auslastung}\n`;
+            // Build CSV using array join to avoid repeated string concatenation
+            const lines: string[] = ["timestamp,utilization"];
+            for (const row of exportRows) {
+                lines.push(`${formatTimestamp(row.created_at)},${row.auslastung}`);
             }
 
-            res.send(csv);
+            res.send(lines.join("\n") + "\n");
         }
 
-        console.log(`Export: ${req.ip} downloaded ${rows.length} rows (format=${format}, range=${startDateStr} to ${endDateStr})`);
+        console.log(`Export: ${req.ip} downloaded ${exportRows.length} rows (format=${format}, range=${startDateStr} to ${endDateStr})`);
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: true });
@@ -531,8 +543,8 @@ app.get("/api/v1/gym/history", async (req, res) => {
         return;
     }
 
-    // Limit to 2 years max to protect database
-    const maxRangeMs = 730 * 24 * 60 * 60 * 1000;
+    // Limit to 1 year max to protect database
+    const maxRangeMs = 365 * 24 * 60 * 60 * 1000;
     if (endDate.getTime() - startDate.getTime() > maxRangeMs) {
         res.status(400).json({ error: true, msg: "Date range cannot exceed 1 year" });
         return;
