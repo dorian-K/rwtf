@@ -58,6 +58,10 @@ function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineR
 
     let minX = new Date(todayReference).setHours(6, 0, 0, 0);
     let maxX = new Date(todayReference).setHours(23, 59, 59, 999);
+    const currentTimestamp = new Intl.DateTimeFormat("de-DE", {
+        dateStyle: "medium",
+        timeStyle: "short",
+    }).format(new Date());
 
     const options: ApexOptions = {
         yaxis: {
@@ -90,7 +94,7 @@ function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineR
             dashArray: [0, 1, 1].concat(new Array(historicData.length).fill(3)),
         },
         title: {
-            text: "RWTH Gym Utilization",
+            text: `RWTH Gym Utilization · ${currentTimestamp}`,
             align: "left",
         },
         theme: {
@@ -171,12 +175,13 @@ function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineR
     }
     //smoothedArrivals.push(historicArrivals[historicArrivals.length - 1]);
 
-    let series: ApexAxisChartSeries = [
+    let series: ApexOptions["series"] = [
         {
             name: "Utilization",
             zIndex: 1,
             data: data.map((g) => ({
                 x: g.created_at,
+                // Absolute number of people currently in the gym, not a percentage value.
                 y: g.auslastung,
             })),
         },
@@ -230,11 +235,40 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
 
     const days = ["Today", "Tomorrow", "+2 days", "+3 days"];
     const [dayoffset, setDayoffset] = useState(0);
-    const methods: { value: PredictionMethod; label: string; desc: string }[] = [
-        { value: "closest", label: "Similar Weeks", desc: "Finds weeks with similar patterns" },
-        { value: "average", label: "Simple Average", desc: "Average of all past weeks" },
-        { value: "median", label: "Robust Average", desc: "Ignores outliers" },
-        { value: "dayofweek", label: "Same Weekday", desc: "Only uses same day of week" },
+    const methods: {
+        value: PredictionMethod;
+        label: string;
+        shortDesc: string;
+        fullDesc: string;
+    }[] = [
+        {
+            value: "closest",
+            label: "Similar Weeks ⭐",
+            shortDesc: "Finds weeks with similar patterns",
+            fullDesc:
+                "Finds historical weeks with a similar crowd pattern to today and averages them. Captures both the day-of-week effect AND unusual events (e.g., holidays). Most accurate when past weeks had clear, consistent patterns.",
+        },
+        {
+            value: "average",
+            label: "Simple Average",
+            shortDesc: "Weighted average of all past weeks",
+            fullDesc:
+                "A weighted average of all historical weeks. Recent weeks count 3x more than older ones. Smooths out noise but can be skewed by unusually crowded or empty weeks.",
+        },
+        {
+            value: "median",
+            label: "Robust Average",
+            shortDesc: "Median-based, ignores outliers",
+            fullDesc:
+                "Like Simple Average but uses median instead of mean. Extreme values (packed or empty weeks) have less influence. More stable when data contains unusual weeks.",
+        },
+        {
+            value: "dayofweek",
+            label: "Same Weekday",
+            shortDesc: "Only uses data from the same day of week",
+            fullDesc:
+                "Only looks at data from the same day of week (e.g., all Mondays). Best for capturing the regular weekly rhythm. Ignores longer-term trends and anomalies.",
+        },
     ];
     const [method, setMethod] = useState<PredictionMethod>("closest");
     const api = useBackendContext();
@@ -303,7 +337,7 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
                             </button>
                         ))}
                     </div>
-                    <div className="input-group" style={{ maxWidth: "250px" }}>
+                    <div className="input-group" style={{ maxWidth: "400px" }}>
                         <label className="input-group-text" htmlFor="methodSelect">
                             Prediction:
                         </label>
@@ -312,15 +346,21 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
                             id="methodSelect"
                             value={method}
                             onChange={(e) => setMethod(e.target.value as PredictionMethod)}
-                            title={methods.find((m) => m.value === method)?.desc}
+                            title={methods.find((m) => m.value === method)?.fullDesc}
                         >
                             {methods.map((m) => (
-                                <option key={m.value} value={m.value} title={m.desc}>
+                                <option key={m.value} value={m.value} title={m.fullDesc}>
                                     {m.label}
                                 </option>
                             ))}
                         </select>
                     </div>
+                    {method === "closest" && (
+                        <small className="text-muted ms-2 mt-1">
+                            <span className="badge bg-success me-1">Recommended</span>
+                            Best overall accuracy for regular gym usage.
+                        </small>
+                    )}
                     {isLoading && <div className="spinner-border"></div>}
                 </div>
             )}
@@ -497,13 +537,21 @@ function GymStuff() {
                 <GymPlotWithHandles />
                 <div className="mt-2">
                     <hr />
+                    <div className="mb-3">
+                        <Link href="/trends" className="btn btn-primary">
+                            View Historical Trends
+                        </Link>
+                    </div>
                     <h4>Legend</h4>
                     <small>
                         <dl>
                             <dt>
                                 <strong>Utilization</strong>:
                             </dt>
-                            <dd>Number of people in the gym as reported by HSZ.</dd>
+                            <dd>
+                                Absolute number of people in the gym as reported by HSZ, not a
+                                percentage.
+                            </dd>
                             <dt>
                                 <strong>Prediction</strong>:
                             </dt>
@@ -533,7 +581,6 @@ function GymStuff() {
                     </small>
                     <small>
                         This Website is <a href="https://github.com/dorian-K/rwtf">open-source</a>!
-                        | <Link href="/trends">View Historical Trends</Link>
                     </small>
                     <hr />
                     <h4>Embed</h4>

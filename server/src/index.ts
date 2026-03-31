@@ -521,8 +521,8 @@ app.get("/api/v1/gym/history", async (req, res) => {
         return;
     }
 
-    // Limit to 1 year max to protect database
-    const maxRangeMs = 365 * 24 * 60 * 60 * 1000;
+    // Limit to 2 years max to protect database
+    const maxRangeMs = 730 * 24 * 60 * 60 * 1000;
     if (endDate.getTime() - startDate.getTime() > maxRangeMs) {
         res.status(400).json({ error: true, msg: "Date range cannot exceed 1 year" });
         return;
