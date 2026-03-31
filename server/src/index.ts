@@ -436,6 +436,16 @@ app.get("/api/v1/gym/export", limiterExport, async (req, res) => {
     }
 
     const MAX_ROWS = 10000; // Max rows for export
+
+    // Helper to format timestamps consistently
+    const formatTimestamp = (value: any): string => {
+        if (value instanceof Date) {
+            return value.toISOString();
+        }
+        const d = new Date(value);
+        return isNaN(d.getTime()) ? String(value) : d.toISOString();
+    };
+
     let conn;
     try {
         conn = await getConnection();
@@ -463,7 +473,7 @@ app.get("/api/v1/gym/export", limiterExport, async (req, res) => {
             res.setHeader("Cache-Control", "no-store");
             res.json({
                 data: rows.map((r: any) => ({
-                    timestamp: (r.created_at as Date).toISOString(),
+                    timestamp: formatTimestamp(r.created_at),
                     utilization: r.auslastung,
                 })),
                 metadata: {
@@ -484,7 +494,7 @@ app.get("/api/v1/gym/export", limiterExport, async (req, res) => {
             // Build CSV content
             let csv = "timestamp,utilization\n";
             for (const row of rows) {
-                csv += `${(row.created_at as Date).toISOString()},${row.auslastung}\n`;
+                csv += `${formatTimestamp(row.created_at)},${row.auslastung}\n`;
             }
 
             res.send(csv);
