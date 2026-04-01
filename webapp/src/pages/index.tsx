@@ -11,7 +11,7 @@ const ReactApexChart = React.lazy(() => import("react-apexcharts"));
 function LiveStatusCard({
     gym,
     gymLine,
-    dayoffset,
+    dayoffset: dayoffsetProp,
 }: {
     gym: GymResponse;
     gymLine: GymInterpLineResponse;
@@ -79,7 +79,7 @@ function LiveStatusCard({
     const getBestTime = () => {
         if (!gymLine?.interpLine || gymLine.interpLine.length === 0) return null;
 
-        const refTime = new Date(Date.now() + dayoffset * 24 * 3600000);
+        const refTime = new Date(Date.now() + dayoffsetProp * 24 * 3600000);
         const threeHoursLater = new Date(refTime.getTime() + 3 * 3600000);
         let best = null;
         for (const p of gymLine.interpLine) {
@@ -98,7 +98,7 @@ function LiveStatusCard({
     const getStayDuration = () => {
         if (currentUtil === null || !gymLine?.interpLine || currentUtil > 70) return null;
 
-        const refTime = new Date(Date.now() + dayoffset * 24 * 3600000);
+        const refTime = new Date(Date.now() + dayoffsetProp * 24 * 3600000);
         // Find when it hits 70% (uncomfortable)
         for (const p of gymLine.interpLine) {
             const ptTime = new Date(p.created_at);
