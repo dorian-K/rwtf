@@ -8,7 +8,15 @@ import { EMBED_CODE } from "./embed_gym";
 
 const ReactApexChart = React.lazy(() => import("react-apexcharts"));
 
-function LiveStatusCard({ gym, gymLine, dayoffset }: { gym: GymResponse; gymLine: GymInterpLineResponse; dayoffset: number }) {
+function LiveStatusCard({
+    gym,
+    gymLine,
+    dayoffset,
+}: {
+    gym: GymResponse;
+    gymLine: GymInterpLineResponse;
+    dayoffset: number;
+}) {
     // Current utilization — sort by timestamp to ensure we get the latest point
     const latestDataPoint =
         gym.data_today.length > 0
@@ -22,7 +30,7 @@ function LiveStatusCard({ gym, gymLine, dayoffset }: { gym: GymResponse; gymLine
     const getGoWait = () => {
         if (currentUtil === null || !gymLine?.interpLine) return null;
         // Find the prediction closest to now + 1 hour (using full timestamp, not fixed index)
-        // eslint-disable-next-line react-hooks/purity
+
         const target = new Date(Date.now() + 3600000);
         let closestPoint = gymLine.interpLine[0];
         let minDiff = Infinity;
@@ -67,13 +75,10 @@ function LiveStatusCard({ gym, gymLine, dayoffset }: { gym: GymResponse; gymLine
     };
     const timeSlots = getTimeSlots();
 
-    // dayoffset: 0 = today, 1 = tomorrow (for next-day predictions)
-    const dayoffset = 0;
-
     // Find best time to go in next 3 hours
     const getBestTime = () => {
         if (!gymLine?.interpLine || gymLine.interpLine.length === 0) return null;
-        // eslint-disable-next-line react-hooks/purity
+
         const refTime = new Date(Date.now() + dayoffset * 24 * 3600000);
         const threeHoursLater = new Date(refTime.getTime() + 3 * 3600000);
         let best = null;
@@ -92,7 +97,7 @@ function LiveStatusCard({ gym, gymLine, dayoffset }: { gym: GymResponse; gymLine
     // For people already at the gym: "How long until it gets crowded?"
     const getStayDuration = () => {
         if (currentUtil === null || !gymLine?.interpLine || currentUtil > 70) return null;
-        // eslint-disable-next-line react-hooks/purity
+
         const refTime = new Date(Date.now() + dayoffset * 24 * 3600000);
         // Find when it hits 70% (uncomfortable)
         for (const p of gymLine.interpLine) {
@@ -623,7 +628,6 @@ function GymStuff() {
     const [picUrl, setPicUrl] = useState<string>("https://rwtf.dorianko.ch/embed_picture.png");
 
     useEffect(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setEmbedCode(EMBED_CODE(window.location.origin));
         setPicUrl(`${window.location.origin}/embed_picture.png`);
     }, []);
