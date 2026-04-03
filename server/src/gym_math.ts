@@ -166,7 +166,7 @@ function makeDayOfWeekLine(gymHist: GymDataFullWeek[], currentDayOfWeek: number)
 
 function makeClosestLine(gymHist: GymDataFullWeek[], currentWeek: GymDataFullWeek, currentDayOfWeek: number) {
     const MINIMUM_COMPARE_POINTS = 6;
-    const DIFFERENT_WEEKDAY_WEIGHT_FACTOR = 5;
+    const DIFFERENT_WEEKDAY_WEIGHT_FACTOR = 2;
     const currentDayData = getCurrentDayData(currentWeek, currentDayOfWeek);
 
     if (currentDayData.length < MINIMUM_COMPARE_POINTS || gymHist.length <= 3) {
