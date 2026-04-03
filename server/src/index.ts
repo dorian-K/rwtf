@@ -137,8 +137,7 @@ app.get("/api/v1/gym_interpline", async (req, res) => {
         let startTime = new Date();
         let response: any;
 
-        // old `makeAverageLine` used 12 weeks of data and did not include current week
-        const NUM_WEEKS = 60; // 1 year and a bit
+        const NUM_WEEKS = 120; // 2 years and a bit
         const targetDate = new Date();
         targetDate.setDate(targetDate.getDate() + dayoffset);
         const currentDayOfWeek = targetDate.getDay();
@@ -165,6 +164,10 @@ app.get("/api/v1/gym_interpline", async (req, res) => {
                 "SELECT auslastung, created_at FROM rwth_gym WHERE created_at >= ? AND created_at <= ? LIMIT 3500",
                 [startDate, endDate]
             );
+
+            if(i > 60 && rows.length < 20) {
+                break; // very little data
+            }
 
             const sanitized = rows.map((row: any) => {
                 return {
