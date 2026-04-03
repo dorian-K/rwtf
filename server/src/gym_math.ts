@@ -2,7 +2,13 @@ export interface GymDataPiece {
     auslastung: number;
     created_at: string;
 }
-export interface GymDataWeek {
+
+export interface GymDataFullWeek {
+    days: GymDataPiece[][];
+    weight: number;
+}
+
+interface WeightedDayData {
     data: GymDataPiece[];
     weight: number;
 }
@@ -12,54 +18,77 @@ function getDayOfWeek(dateStr: string): number {
     return new Date(dateStr).getDay();
 }
 
-// This function averages multiple weeks of gym data into a single average line (with weights)
-function makeAverageLine(gym_hist: GymDataWeek[], useMedian = false) {
-    let minX = new Date().setHours(6, 0, 0, 0);
-    let maxX = new Date().setHours(23, 59, 59, 999);
-    let historicAvg = [];
-    let historicData = gym_hist.map((week) => {
-        return {
-            data: week.data
-                .map((g) => {
-                    const gDate = new Date(g.created_at);
-                    return {
-                        ...g,
-                        created_at: new Date(minX).setHours(
-                            gDate.getHours(),
-                            gDate.getMinutes(),
-                            gDate.getSeconds(),
-                            gDate.getMilliseconds()
-                        ),
-                    };
-                })
-                .sort((a, b) => a.created_at - b.created_at),
-            weight: week.weight,
-        };
-    });
+function normalizeDataToTimeOfDay(data: GymDataPiece[], minX = new Date().setHours(6, 0, 0, 0)) {
+    return data
+        .map((g) => {
+            const gDate = new Date(g.created_at);
+            return {
+                ...g,
+                created_at: new Date(minX).setHours(
+                    gDate.getHours(),
+                    gDate.getMinutes(),
+                    gDate.getSeconds(),
+                    gDate.getMilliseconds()
+                ),
+            };
+        })
+        .sort((a, b) => a.created_at - b.created_at);
+}
 
-    // funny code to calculate historic average
-    // this is complicated because the data is not aligned to a grid in the time dimension
-    let hrs = Math.round((maxX - minX) / (1000 * 60 * 60));
-    let lastVals = new Array(historicData.length).fill(0);
+function makeDayKey(dateStr: string) {
+    const date = new Date(dateStr);
+    return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
+function flattenWeeksToDays(gymHist: GymDataFullWeek[]): WeightedDayData[] {
+    return gymHist.flatMap((week) =>
+        week.days
+            .filter((day) => day.length > 0)
+            .map((day) => ({
+                data: day,
+                weight: week.weight,
+            }))
+    );
+}
+
+function getDaysForWeekday(gymHist: GymDataFullWeek[], dayOfWeek: number): WeightedDayData[] {
+    return flattenWeeksToDays(gymHist).filter(
+        (day) => day.data.length > 0 && getDayOfWeek(day.data[0].created_at) === dayOfWeek
+    );
+}
+
+function averageDays(dayData: WeightedDayData[], useMedian = false) {
+    const minX = new Date().setHours(6, 0, 0, 0);
+    const maxX = new Date().setHours(23, 59, 59, 999);
+    const historicAvg = [];
+    const historicData = dayData.map((day) => ({
+        data: normalizeDataToTimeOfDay(day.data, minX),
+        weight: day.weight,
+    }));
+
+    const hrs = Math.round((maxX - minX) / (1000 * 60 * 60));
+    const lastVals = new Array(historicData.length).fill(0);
     for (let min = 0; min < hrs * 60; min += 5) {
-        let time = +new Date(minX + min * 60 * 1000);
-        let values: number[] = [];
-        let weights: number[] = [];
+        const time = +new Date(minX + min * 60 * 1000);
+        const values: number[] = [];
+        const weights: number[] = [];
         let totalWeight = 0;
+
         for (let w = 0; w < historicData.length; w++) {
-            let week = historicData[w].data;
-            let weight = historicData[w].weight;
-            if (week.length < 2) {
+            const day = historicData[w].data;
+            const weight = historicData[w].weight;
+            if (day.length < 2) {
                 continue;
             }
+
             let nextTime = lastVals[w];
-            while (nextTime < week.length && week[nextTime].created_at < time) {
+            while (nextTime < day.length && day[nextTime].created_at < time) {
                 nextTime++;
             }
-            // linear interpolation
-            if (nextTime > 0 && nextTime < week.length) {
-                const a = week[nextTime - 1];
-                const b = week[nextTime];
+
+            if (nextTime > 0 && nextTime < day.length) {
+                const a = day[nextTime - 1];
+                const b = day[nextTime];
                 const x = (time - a.created_at) / (b.created_at - a.created_at);
                 if (x < 0 || x > 1) {
                     console.error("x out of bounds", x);
@@ -70,28 +99,28 @@ function makeAverageLine(gym_hist: GymDataWeek[], useMedian = false) {
                     totalWeight += weight;
                 }
             } else if (nextTime === 0) {
-                if (Math.abs(week[nextTime].created_at - time) < 1000 * 60 * 15) {
-                    values.push(week[nextTime].auslastung);
+                if (Math.abs(day[nextTime].created_at - time) < 1000 * 60 * 15) {
+                    values.push(day[nextTime].auslastung);
                     weights.push(weight);
                     totalWeight += weight;
                 }
-            } else if (nextTime === week.length) {
-                if (Math.abs(week[nextTime - 1].created_at - time) < 1000 * 60 * 15) {
-                    values.push(week[nextTime - 1].auslastung);
+            } else if (nextTime === day.length) {
+                if (Math.abs(day[nextTime - 1].created_at - time) < 1000 * 60 * 15) {
+                    values.push(day[nextTime - 1].auslastung);
                     weights.push(weight);
                     totalWeight += weight;
                 }
             }
+
             lastVals[w] = nextTime;
         }
-        
+
         let avgValue = 0;
         if (values.length > 0) {
             if (useMedian) {
-                // Sort values by weight-adjusted value for weighted median
                 const weightedValues = values.map((v, i) => ({ v, w: weights[i] }));
                 weightedValues.sort((a, b) => a.v - b.v);
-                // Find weighted median
+
                 let cumWeight = 0;
                 const halfWeight = totalWeight / 2;
                 for (const item of weightedValues) {
@@ -102,106 +131,78 @@ function makeAverageLine(gym_hist: GymDataWeek[], useMedian = false) {
                     }
                 }
             } else {
-                // Weighted average
                 for (let i = 0; i < values.length; i++) {
                     avgValue += weights[i] * values[i];
                 }
                 avgValue /= totalWeight;
             }
         }
+
         historicAvg.push({ created_at: time, auslastung: avgValue });
     }
+
     return historicAvg;
 }
 
-// Average using only data from the same day of week as today
-function makeDayOfWeekLine(gym_hist: GymDataWeek[], currentDayOfWeek: number) {
-    let minX = new Date().setHours(6, 0, 0, 0);
-    let maxX = new Date().setHours(23, 59, 59, 999);
-    
-    // Filter data to only include the same day of week
-    const filteredData = gym_hist.map((week) => ({
-        data: week.data.filter((g) => getDayOfWeek(g.created_at) === currentDayOfWeek),
-        weight: week.weight,
-    })).filter((week) => week.data.length > 0);
-    
-    if (filteredData.length === 0) {
-        // Fall back to regular average if no data for this day
-        return makeAverageLine(gym_hist);
-    }
-    
-    return makeAverageLine(filteredData);
+function getCurrentDayData(currentWeek: GymDataFullWeek, currentDayOfWeek: number): GymDataPiece[] {
+    const matchingDay = currentWeek.days.find(
+        (day) => day.length > 0 && getDayOfWeek(day[0].created_at) === currentDayOfWeek
+    );
+    return matchingDay ?? [];
 }
 
-// First find the three most similar weeks to the current week, then average those
-// We also try to align all the weeks to the current one by scaling it appropriately
-function makeClosestLine(gym_hist: GymDataWeek[], data_of_current_day: GymDataPiece[]) {
-    const MINIMUM_COMPARE_POINTS = 6;
-    if (data_of_current_day.length < MINIMUM_COMPARE_POINTS || gym_hist.length <= 3) {
-        return makeAverageLine(gym_hist);
+function makeAverageLine(gymHist: GymDataFullWeek[], currentDayOfWeek: number, useMedian = false) {
+    return averageDays(getDaysForWeekday(gymHist, currentDayOfWeek), useMedian);
+}
+
+function makeDayOfWeekLine(gymHist: GymDataFullWeek[], currentDayOfWeek: number) {
+    const filteredData = getDaysForWeekday(gymHist, currentDayOfWeek);
+    if (filteredData.length === 0) {
+        return averageDays(flattenWeeksToDays(gymHist));
     }
 
-    // calculate the distance of every week to the current day
-    const distances = gym_hist.map((week) => {
-        let total_error = 0;
-        let points_compared = 0;
+    return averageDays(filteredData);
+}
+
+function makeClosestLine(gymHist: GymDataFullWeek[], currentWeek: GymDataFullWeek, currentDayOfWeek: number) {
+    const MINIMUM_COMPARE_POINTS = 6;
+    const DIFFERENT_WEEKDAY_WEIGHT_FACTOR = 5;
+    const currentDayData = getCurrentDayData(currentWeek, currentDayOfWeek);
+
+    if (currentDayData.length < MINIMUM_COMPARE_POINTS || gymHist.length <= 3) {
+        return makeAverageLine(gymHist, currentDayOfWeek);
+    }
+
+    const minX = new Date().setHours(6, 0, 0, 0);
+    const normalizedCurrentDay = normalizeDataToTimeOfDay(currentDayData, minX);
+    const candidateDays = flattenWeeksToDays(gymHist);
+
+    const distances = candidateDays.map((candidateDay) => {
+        let totalError = 0;
+        let pointsCompared = 0;
         let lastHistIndex = 0;
 
-        if (week.data.length < MINIMUM_COMPARE_POINTS || data_of_current_day.length < 1) {
-            // dont use the week if it has too little data
-            return { week: week, distance: Infinity };
+        if (candidateDay.data.length < MINIMUM_COMPARE_POINTS) {
+            return { day: candidateDay, distance: Infinity };
         }
 
-        // we need to normalize the time of day for both the historical and current data
-        // to be able to compare them
-        const minX = new Date().setHours(6, 0, 0, 0);
-        const normalized_week_data = week.data
-            .map((g) => {
-                const gDate = new Date(g.created_at);
-                return {
-                    ...g,
-                    created_at: new Date(minX).setHours(
-                        gDate.getHours(),
-                        gDate.getMinutes(),
-                        gDate.getSeconds(),
-                        gDate.getMilliseconds()
-                    ),
-                };
-            })
-            .sort((a, b) => a.created_at - b.created_at);
+        const normalizedHistoricalDay = normalizeDataToTimeOfDay(candidateDay.data, minX);
+        const interpolatedVals = [];
 
-        const normalized_current_day = data_of_current_day
-            .map((g) => {
-                const gDate = new Date(g.created_at);
-                return {
-                    ...g,
-                    created_at: new Date(minX).setHours(
-                        gDate.getHours(),
-                        gDate.getMinutes(),
-                        gDate.getSeconds(),
-                        gDate.getMilliseconds()
-                    ),
-                };
-            })
-            .sort((a, b) => a.created_at - b.created_at);
-
-        // for every data point in the current day, we find the corresponding value in the historical week
-        // by using linear interpolation. Then we calculate the squared error.
-        let interpolatedVals = [];
-        for (const currentPoint of normalized_current_day) {
+        for (const currentPoint of normalizedCurrentDay) {
             const time = currentPoint.created_at;
             let interpolatedValue = null;
 
             while (
-                lastHistIndex < normalized_week_data.length &&
-                normalized_week_data[lastHistIndex].created_at < time
+                lastHistIndex < normalizedHistoricalDay.length &&
+                normalizedHistoricalDay[lastHistIndex].created_at < time
             ) {
                 lastHistIndex++;
             }
 
-            if (lastHistIndex > 0 && lastHistIndex < normalized_week_data.length) {
-                const a = normalized_week_data[lastHistIndex - 1];
-                const b = normalized_week_data[lastHistIndex];
+            if (lastHistIndex > 0 && lastHistIndex < normalizedHistoricalDay.length) {
+                const a = normalizedHistoricalDay[lastHistIndex - 1];
+                const b = normalizedHistoricalDay[lastHistIndex];
                 const x = (time - a.created_at) / (b.created_at - a.created_at);
 
                 if (x >= 0 && x <= 1) {
@@ -211,12 +212,11 @@ function makeClosestLine(gym_hist: GymDataWeek[], data_of_current_day: GymDataPi
 
             interpolatedVals.push(interpolatedValue);
         }
-        // we have a list of interpolated values that align with our current day
-        // now we do least squares regression with y = mx to align it as closely as possible to the current day
+
         let sumXY = 0;
         let sumXX = 0;
-        for (let i = 0; i < normalized_current_day.length; i++) {
-            const y = normalized_current_day[i].auslastung;
+        for (let i = 0; i < normalizedCurrentDay.length; i++) {
+            const y = normalizedCurrentDay[i].auslastung;
             const x = interpolatedVals[i];
             if (x !== null) {
                 sumXY += x * y;
@@ -228,49 +228,79 @@ function makeClosestLine(gym_hist: GymDataWeek[], data_of_current_day: GymDataPi
         m = Math.min(m, 1.25);
         m = Math.max(m, 0.5);
 
-        // now calculate the total squared error with the found m
-        for (let i = 0; i < normalized_current_day.length; i++) {
-            const y = normalized_current_day[i].auslastung;
+        for (let i = 0; i < normalizedCurrentDay.length; i++) {
+            const y = normalizedCurrentDay[i].auslastung;
             const x = interpolatedVals[i];
             if (x !== null) {
                 const predictedY = m * x;
                 const error = y - predictedY;
-                total_error += error * error;
-                points_compared++;
+                totalError += error * error;
+                pointsCompared++;
             }
-        }       
+        }
 
         let mse = Infinity;
-        if (points_compared >= MINIMUM_COMPARE_POINTS && points_compared >= normalized_current_day.length * 0.8 - 1) {
-            mse = total_error / points_compared; // only consider weeks that have enough points compared
+        if (
+            pointsCompared >= MINIMUM_COMPARE_POINTS &&
+            pointsCompared >= normalizedCurrentDay.length * 0.8 - 1
+        ) {
+            mse = totalError / pointsCompared;
         }
-        mse /= week.weight; // adjust by weight to prefer more reliable weeks
+        mse /= candidateDay.weight;
 
-        // of course we also need to adjust the week data with the found m
-        let adjustedWeek: GymDataWeek = {
-            data: week.data.map((d) => ({
-                ...d,
-                auslastung: d.auslastung * m,
-            })),
-            weight: week.weight,
+        const historicalDayOfWeek = getDayOfWeek(candidateDay.data[0].created_at);
+        if (historicalDayOfWeek !== currentDayOfWeek) {
+            mse *= DIFFERENT_WEEKDAY_WEIGHT_FACTOR;
+        }
+
+        return {
+            day: {
+                data: candidateDay.data.map((d) => ({
+                    ...d,
+                    auslastung: d.auslastung * m,
+                })),
+                weight: candidateDay.weight,
+            },
+            distance: mse,
         };
-
-        return { week: adjustedWeek, distance: mse };
     });
 
-    // sort the weeks by distance and take the three best ones
-    const sortedWeeks = distances.sort((a, b) => a.distance - b.distance);
-    const closestWeeks = sortedWeeks.slice(0, 5).map((d) => ({
-        ...d.week,
-        weight: 1, // give them equal weight
-    }));
+    const closestDays = distances
+        .sort((a, b) => a.distance - b.distance)
+        .slice(0, 5)
+        .map((d) => ({
+            data: d.day.data,
+            weight: 1,
+        }));
 
-    if (closestWeeks.length === 0) {
+    if (closestDays.length === 0) {
         return [];
     }
 
-    // average the five best weeks
-    return makeAverageLine(closestWeeks);
+    return averageDays(closestDays);
 }
 
-export { makeAverageLine, makeClosestLine, makeDayOfWeekLine };
+function buildFullWeek(data: GymDataPiece[], weight: number): GymDataFullWeek {
+    const dayMap = new Map<string, GymDataPiece[]>();
+
+    for (const point of data) {
+        const key = makeDayKey(point.created_at);
+        const existing = dayMap.get(key);
+        if (existing) {
+            existing.push(point);
+        } else {
+            dayMap.set(key, [point]);
+        }
+    }
+
+    return {
+        days: Array.from(dayMap.values()).map((day) =>
+            day.sort(
+                (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+            )
+        ),
+        weight,
+    };
+}
+
+export { buildFullWeek, makeAverageLine, makeClosestLine, makeDayOfWeekLine };

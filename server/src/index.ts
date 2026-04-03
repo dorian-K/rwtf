@@ -5,7 +5,7 @@ import { PoolConnection } from "mariadb";
 import { SAMPLE } from "./sample_data.js";
 import { downloadStreamFile, isAachener } from "./study.js";
 import { rateLimit } from "express-rate-limit";
-import { GymDataWeek, makeAverageLine, makeClosestLine, makeDayOfWeekLine } from "./gym_math.js";
+import { buildFullWeek, GymDataFullWeek, makeAverageLine, makeClosestLine, makeDayOfWeekLine } from "./gym_math.js";
 import "dotenv/config";
 import { parse } from "date-fns";
 import XXH from "xxhashjs";
@@ -137,21 +137,32 @@ app.get("/api/v1/gym_interpline", async (req, res) => {
         let startTime = new Date();
         let response: any;
 
-        let weeks: GymDataWeek[] = [];
-
         // old `makeAverageLine` used 12 weeks of data and did not include current week
         const NUM_WEEKS = 60; // 1 year and a bit
-        for (let i = 0; i <= NUM_WEEKS; i++) {
-            const startDate = new Date();
-            startDate.setDate(startDate.getDate() - i * 7 + dayoffset);
-            startDate.setHours(6, 0, 0, 0);
+        const targetDate = new Date();
+        targetDate.setDate(targetDate.getDate() + dayoffset);
+        const currentDayOfWeek = targetDate.getDay();
 
-            const endDate = new Date();
-            endDate.setDate(endDate.getDate() - i * 7 + dayoffset);
+        // Calculate prediction line based on selected method
+        const methodParam = (req.query.method as string) || "closest";
+        const validMethods = ["closest", "average", "median", "dayofweek"];
+        const method = validMethods.includes(methodParam) ? methodParam : "closest";
+
+        let weeks: GymDataFullWeek[] = [];
+        for (let i = 0; i <= NUM_WEEKS; i++) {
+            const weekDate = new Date(targetDate);
+            weekDate.setDate(weekDate.getDate() - i * 7);
+
+            const startDate = new Date(weekDate);
+            startDate.setDate(startDate.getDate() - currentDayOfWeek);
+            startDate.setHours(0, 0, 0, 0);
+
+            const endDate = new Date(weekDate);
+            endDate.setDate(endDate.getDate() + (6 - currentDayOfWeek));
             endDate.setHours(23, 59, 59, 999);
 
             const rows = await conn.query(
-                "SELECT auslastung, created_at FROM rwth_gym WHERE created_at >= ? AND created_at <= ? LIMIT 500",
+                "SELECT auslastung, created_at FROM rwth_gym WHERE created_at >= ? AND created_at <= ? LIMIT 3500",
                 [startDate, endDate]
             );
 
@@ -161,27 +172,19 @@ app.get("/api/v1/gym_interpline", async (req, res) => {
                     created_at: row.created_at,
                 };
             });
-            weeks.push({
-                data: sanitized,
-                weight: i <= 4 ? 3 : 1, // prefer recent weeks more heavily
-            });
+            weeks.push(buildFullWeek(sanitized, i <= 4 ? 3 : 1));
         }
-        // Calculate prediction line based on selected method
-        const methodParam = (req.query.method as string) || "closest";
-        const validMethods = ["closest", "average", "median", "dayofweek"];
-        const method = validMethods.includes(methodParam) ? methodParam : "closest";
+
         let interpLine;
-        const targetDate = new Date(Date.now() + dayoffset * 24 * 3600000);
-        const currentDayOfWeek = targetDate.getDay();
         
         switch (method) {
             case "average":
                 // Simple weighted average of all historical weeks
-                interpLine = makeAverageLine(weeks);
+                interpLine = makeAverageLine(weeks, currentDayOfWeek);
                 break;
             case "median":
                 // Weighted average using median (more robust to outliers)
-                interpLine = makeAverageLine(weeks, true);
+                interpLine = makeAverageLine(weeks, currentDayOfWeek, true);
                 break;
             case "dayofweek":
                 // Average only data from the same day of week
@@ -189,8 +192,9 @@ app.get("/api/v1/gym_interpline", async (req, res) => {
                 break;
             case "closest":
             default:
-                // Find most similar weeks to current week (excluding current week itself) and average them
-                interpLine = makeClosestLine(weeks.slice(1), weeks[0].data);
+                // Find most similar historical days to the selected day and average the best matches.
+                // Same-weekday history is preferred, but other weekdays can still win if they are much closer.
+                interpLine = makeClosestLine(weeks.slice(1), weeks[0], currentDayOfWeek);
         }
 
         // calculate all time high
