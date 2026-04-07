@@ -401,6 +401,134 @@ app.get("/api/v1/is_aachen", async (req, res) => {
     }
 });
 
+// Rate limiter for export endpoint: 5 requests per hour per IP
+const limiterExport = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+// GET /api/v1/gym/export - Export gym data as CSV or JSON
+// Query params: start_date, end_date, format (csv/json)
+app.get("/api/v1/gym/export", limiterExport, async (req, res) => {
+    const startDateStr = req.query.start_date as string;
+    const endDateStr = req.query.end_date as string;
+    const formatParam = (req.query.format as string) || "csv";
+    const format = (formatParam === "json" || formatParam === "csv") ? formatParam : "csv";
+
+    if (!startDateStr || !endDateStr) {
+        res.status(400).json({ error: true, msg: "start_date and end_date are required" });
+        return;
+    }
+
+    // Validate date format (YYYY-MM-DD)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(startDateStr) || !/^\d{4}-\d{2}-\d{2}$/.test(endDateStr)) {
+        res.status(400).json({ error: true, msg: "Invalid date format. Use YYYY-MM-DD." });
+        return;
+    }
+
+    // Parse as local midnight (avoid UTC interpretation of YYYY-MM-DD)
+    const parseLocalDate = (str: string): Date => {
+        const [year, month, day] = str.split("-").map(Number);
+        return new Date(year, month - 1, day, 0, 0, 0, 0);
+    };
+
+    const startDate = parseLocalDate(startDateStr);
+    const endDate = parseLocalDate(endDateStr);
+    // End of end date in local time (23:59:59.999)
+    const endOfEndDate = new Date(endDate.getTime() + 24 * 60 * 60 * 1000 - 1);
+
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+        res.status(400).json({ error: true, msg: "Invalid date format" });
+        return;
+    }
+
+    // Limit to 31 days max (per PR specification)
+    const maxRangeMs = 31 * 24 * 60 * 60 * 1000;
+    const rangeMs = endDate.getTime() - startDate.getTime();
+    if (rangeMs > maxRangeMs || rangeMs < 0) {
+        res.status(400).json({ error: true, msg: "Date range cannot exceed 31 days" });
+        return;
+    }
+
+    // Safety limit: 10,000 data points per request (per PR specification)
+    const MAX_ROWS = 10000;
+    let conn;
+    try {
+        conn = await getConnection();
+
+        // Query with LIMIT MAX_ROWS + 1 to detect overflow without extra COUNT query
+        const rows = await conn.query(
+            `SELECT auslastung, created_at
+            FROM rwth_gym
+            WHERE created_at >= ? AND created_at <= ?
+            ORDER BY created_at
+            LIMIT ?`,
+            [startDate, endOfEndDate, MAX_ROWS + 1]
+        );
+
+        const hasMore = rows.length > MAX_ROWS;
+        const exportRows = hasMore ? rows.slice(0, MAX_ROWS) : rows;
+
+        if (hasMore) {
+            res.status(400).json({
+                error: true,
+                msg: `Export limit exceeded. Maximum 10,000 data points per request. Please narrow your date range.`,
+            });
+            conn.end();
+            return;
+        }
+
+        // Helper to format timestamps as ISO strings regardless of input type
+        const formatTimestamp = (value: any): string => {
+            if (value instanceof Date) return value.toISOString();
+            const d = new Date(value);
+            return isNaN(d.getTime()) ? String(value) : d.toISOString();
+        };
+
+        // Build Content-Disposition: sanitize all values for header safety
+        const safeStr = (s: string) => s.replace(/[^a-zA-Z0-9._-]/g, '_');
+        res.setHeader("Content-Disposition", `attachment; filename="gym_data_${safeStr(startDateStr)}_${safeStr(endDateStr)}.${safeStr(format)}"`);
+        res.setHeader("Cache-Control", "no-store");
+        res.setHeader("Pragma", "no-cache");
+
+        if (format === "json") {
+            res.setHeader("Content-Type", "application/json");
+            res.json({
+                data: exportRows.map((r: any) => ({
+                    timestamp: formatTimestamp(r.created_at),
+                    utilization: r.auslastung,
+                })),
+                metadata: {
+                    start_date: startDateStr,
+                    end_date: endDateStr,
+                    total_samples: exportRows.length,
+                },
+            });
+        } else {
+            // CSV format — strictly two-column, no injected comment lines
+            res.setHeader("Content-Type", "text/csv");
+            res.setHeader("X-Data-Truncated", "false");
+
+            // Build CSV using array join to avoid repeated string concatenation
+            const lines: string[] = ["timestamp,utilization"];
+            for (const row of exportRows) {
+                lines.push(`${formatTimestamp(row.created_at)},${row.auslastung}`);
+            }
+
+            res.send(lines.join("\n") + "\n");
+        }
+
+        console.log(`Export: ${req.ip} downloaded ${exportRows.length} rows (format=${format}, range=${startDateStr} to ${endDateStr})`);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: true });
+    } finally {
+        if (conn) conn.end();
+    }
+});
+
 // Historical trends endpoints
 
 // GET /api/v1/gym/history - aggregated historical data
@@ -423,8 +551,8 @@ app.get("/api/v1/gym/history", async (req, res) => {
         return;
     }
 
-    // Limit to 2 years max to protect database
-    const maxRangeMs = 730 * 24 * 60 * 60 * 1000;
+    // Limit to 1 year max to protect database
+    const maxRangeMs = 365 * 24 * 60 * 60 * 1000;
     if (endDate.getTime() - startDate.getTime() > maxRangeMs) {
         res.status(400).json({ error: true, msg: "Date range cannot exceed 1 year" });
         return;

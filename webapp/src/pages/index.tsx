@@ -398,6 +398,125 @@ function CopyStation({ str }: { str: string }) {
     );
 }
 
+function DataExportForm() {
+    const today = new Date();
+    const formatDate = (d: Date) => {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+    };
+
+    // Parse YYYY-MM-DD as local midnight (avoids JS treating it as UTC)
+    const parseLocalDate = (str: string): Date => {
+        const [year, month, day] = str.split("-").map(Number);
+        return new Date(year, month - 1, day, 0, 0, 0, 0);
+    };
+
+    const getLastDays = (days: number) => {
+        const d = new Date(today);
+        d.setDate(d.getDate() - days);
+        return d;
+    };
+
+    const [startDate, setStartDate] = useState<string>(formatDate(getLastDays(7)));
+    const [endDate, setEndDate] = useState<string>(formatDate(today));
+    const [format, setFormat] = useState<"csv" | "json">("csv");
+    const [error, setError] = useState<string | null>(null);
+
+    const setPresetRange = (preset: "lastYear" | "allData") => {
+        const end = new Date();
+        if (preset === "lastYear") {
+            const start = new Date(end);
+            start.setFullYear(start.getFullYear() - 1);
+            setStartDate(formatDate(start));
+            setEndDate(formatDate(end));
+        } else if (preset === "allData") {
+            // Use a date far in the past to capture all available data
+            setStartDate("2020-01-01");
+            setEndDate(formatDate(end));
+        }
+    };
+
+    const handleExport = () => {
+        setError(null);
+        const start = parseLocalDate(startDate);
+        const end = parseLocalDate(endDate);
+        const diffDays = Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+        // Backend limit: 31 days
+        if (diffDays > 31) {
+            setError("Date range cannot exceed 31 days");
+            return;
+        }
+        if (diffDays < 0) {
+            setError("End date must be after start date");
+            return;
+        }
+
+        const url = `/api/v1/gym/export?start_date=${startDate}&end_date=${endDate}&format=${format}`;
+        window.open(url, "_blank");
+    };
+
+    return (
+        <div className="mt-2">
+            <div className="btn-group btn-group-sm mb-2" role="group">
+                <button
+                    type="button"
+                    className="btn btn-outline-secondary"
+                    onClick={() => setPresetRange("lastYear")}
+                >
+                    Last year
+                </button>
+                <button
+                    type="button"
+                    className="btn btn-outline-secondary"
+                    onClick={() => setPresetRange("allData")}
+                >
+                    All data
+                </button>
+            </div>
+            <div className="row g-2 align-items-end">
+                <div className="col-auto">
+                    <label className="form-label small mb-1">Start Date</label>
+                    <input
+                        type="date"
+                        className="form-control form-control-sm"
+                        value={startDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                    />
+                </div>
+                <div className="col-auto">
+                    <label className="form-label small mb-1">End Date</label>
+                    <input
+                        type="date"
+                        className="form-control form-control-sm"
+                        value={endDate}
+                        onChange={(e) => setEndDate(e.target.value)}
+                    />
+                </div>
+                <div className="col-auto">
+                    <label className="form-label small mb-1">Format</label>
+                    <select
+                        className="form-select form-select-sm"
+                        value={format}
+                        onChange={(e) => setFormat(e.target.value as "csv" | "json")}
+                    >
+                        <option value="csv">CSV</option>
+                        <option value="json">JSON</option>
+                    </select>
+                </div>
+                <div className="col-auto">
+                    <button className="btn btn-sm btn-primary" onClick={handleExport}>
+                        Download
+                    </button>
+                </div>
+            </div>
+            {error && <div className="text-warning small mt-1">{error}</div>}
+        </div>
+    );
+}
+
 function GymStuff() {
     const [embedCode, setEmbedCode] = useState<string>(EMBED_CODE("https://rwtf.dorianko.ch"));
     const [picUrl, setPicUrl] = useState<string>("https://rwtf.dorianko.ch/embed_picture.png");
@@ -480,6 +599,15 @@ function GymStuff() {
                         Want to write a bot? A screenshot of the graph is made every few minutes and
                         published here:
                         <CopyStation str={picUrl} />
+                    </small>
+                    <hr />
+                    <h4>Export Data</h4>
+                    <small>
+                        Download gym utilization data for your own analysis.
+                        <DataExportForm />
+                        <span className="text-muted small">
+                            Max 31 days per export. Last 5 exports limited per hour.
+                        </span>
                     </small>
                 </div>
             </div>
