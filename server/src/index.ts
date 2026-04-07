@@ -480,8 +480,9 @@ app.get("/api/v1/gym/export", limiterExport, async (req, res) => {
             return isNaN(d.getTime()) ? String(value) : d.toISOString();
         };
 
-        // Build Content-Disposition from validated, clean date strings
-        res.setHeader("Content-Disposition", `attachment; filename="gym_data_${startDateStr}_${endDateStr}.${format}"`);
+        // Build Content-Disposition: sanitize all values for header safety
+        const safeStr = (s: string) => s.replace(/[^a-zA-Z0-9._-]/g, '_');
+        res.setHeader("Content-Disposition", `attachment; filename="gym_data_${safeStr(startDateStr)}_${safeStr(endDateStr)}.${safeStr(format)}"`);
         res.setHeader("Cache-Control", "no-store");
         res.setHeader("Pragma", "no-cache");
 

@@ -424,12 +424,18 @@ function DataExportForm() {
     const [format, setFormat] = useState<"csv" | "json">("csv");
     const [error, setError] = useState<string | null>(null);
 
-    const setPresetRange = (days: number) => {
+    const setPresetRange = (preset: "lastYear" | "allData") => {
         const end = new Date();
-        const start = new Date();
-        start.setDate(end.getDate() - days);
-        setStartDate(formatDate(start));
-        setEndDate(formatDate(end));
+        if (preset === "lastYear") {
+            const start = new Date(end);
+            start.setFullYear(start.getFullYear() - 1);
+            setStartDate(formatDate(start));
+            setEndDate(formatDate(end));
+        } else if (preset === "allData") {
+            // Use a date far in the past to capture all available data
+            setStartDate("2020-01-01");
+            setEndDate(formatDate(end));
+        }
     };
 
     const handleExport = () => {
@@ -458,23 +464,16 @@ function DataExportForm() {
                 <button
                     type="button"
                     className="btn btn-outline-secondary"
-                    onClick={() => setPresetRange(7)}
+                    onClick={() => setPresetRange("lastYear")}
                 >
-                    Last 7 days
+                    Last year
                 </button>
                 <button
                     type="button"
                     className="btn btn-outline-secondary"
-                    onClick={() => setPresetRange(14)}
+                    onClick={() => setPresetRange("allData")}
                 >
-                    Last 14 days
-                </button>
-                <button
-                    type="button"
-                    className="btn btn-outline-secondary"
-                    onClick={() => setPresetRange(30)}
-                >
-                    Last 30 days
+                    All data
                 </button>
             </div>
             <div className="row g-2 align-items-end">
