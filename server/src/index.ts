@@ -948,8 +948,8 @@ app.get("/api/v1/wifi/building_predict", async (req, res) => {
         validMethods.includes(methodParam) ? methodParam : "closest"
     ) as PredictionMethod;
 
-    // WiFi history is shallow compared to the gym (only a few months), so cap the lookback and bail
-    // out once we hit consecutive empty weeks instead of scanning far into a non-existent past.
+    // WiFi history is shallow compared to the gym (only a few months). Cap the lookback window; weeks
+    // with no data simply produce no rows in the single range query below, so empties are free.
     const NUM_WEEKS = 26;
 
     let conn;
@@ -968,32 +968,47 @@ app.get("/api/v1/wifi/building_predict", async (req, res) => {
         targetDate.setDate(targetDate.getDate() + dayoffset);
         const currentDayOfWeek = targetDate.getDay();
 
-        const weeks: FullWeek[] = [];
-        let emptyStreak = 0;
-        for (let i = 0; i <= NUM_WEEKS; i++) {
-            const weekDate = new Date(targetDate);
-            weekDate.setDate(weekDate.getDate() - i * 7);
+        // Start of the target's (Sunday-aligned) week.
+        const currentWeekStart = new Date(targetDate);
+        currentWeekStart.setDate(currentWeekStart.getDate() - currentDayOfWeek);
+        currentWeekStart.setHours(0, 0, 0, 0);
 
-            const startDate = new Date(weekDate);
-            startDate.setDate(startDate.getDate() - currentDayOfWeek);
-            startDate.setHours(0, 0, 0, 0);
+        // Fetch the whole lookback window in ONE query, then split into weeks in JS. This replaces
+        // ~10 sequential per-week queries (each its own index seek + GROUP BY round-trip) with a
+        // single index range scan — empty trailing weeks cost nothing since the range simply has no
+        // rows there.
+        const rangeStart = new Date(currentWeekStart);
+        rangeStart.setDate(rangeStart.getDate() - NUM_WEEKS * 7);
+        const rangeEnd = new Date(currentWeekStart);
+        rangeEnd.setDate(rangeEnd.getDate() + 7);
+        rangeEnd.setMilliseconds(rangeEnd.getMilliseconds() - 1);
 
-            const endDate = new Date(weekDate);
-            endDate.setDate(endDate.getDate() + (6 - currentDayOfWeek));
-            endDate.setHours(23, 59, 59, 999);
+        const series = await fetchBuildingSeries(conn, apnames, rangeStart, rangeEnd);
 
-            const series = await fetchBuildingSeries(conn, apnames, startDate, endDate);
-
-            // Stop after two consecutive empty weeks (older than the current week) — the data simply
-            // doesn't go back that far. The current week (i === 0) is always kept.
-            if (i > 0 && series.length === 0) {
-                if (++emptyStreak >= 2) break;
-            } else {
-                emptyStreak = 0;
-            }
-
-            weeks.push(buildFullWeek(series, i <= 4 ? 3 : 1));
+        // Bucket points into Sunday-aligned weeks, indexed by how many weeks back from the target
+        // week they fall (0 = current week). Mirrors the old per-week weighting exactly.
+        const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+        const byWeek = new Map<number, { value: number; created_at: any }[]>();
+        let maxIdx = 0;
+        for (const p of series) {
+            const pd = new Date(p.created_at);
+            const pWeekStart = new Date(pd);
+            pWeekStart.setDate(pWeekStart.getDate() - pd.getDay());
+            pWeekStart.setHours(0, 0, 0, 0);
+            const idx = Math.round((currentWeekStart.getTime() - pWeekStart.getTime()) / WEEK_MS);
+            if (idx < 0) continue; // defensive: ignore anything past the target week
+            const bucket = byWeek.get(idx);
+            if (bucket) bucket.push(p);
+            else byWeek.set(idx, [p]);
+            if (idx > maxIdx) maxIdx = idx;
         }
+
+        const weeks: FullWeek[] = [];
+        for (let i = 0; i <= maxIdx; i++) {
+            // Recent weeks weighted 3x, like the gym predictor.
+            weeks.push(buildFullWeek(byWeek.get(i) ?? [], i <= 4 ? 3 : 1));
+        }
+        if (weeks.length === 0) weeks.push(buildFullWeek([], 3)); // ensure weeks[0] exists
 
         const predicted = predictLine(method, weeks, currentDayOfWeek, FULL_DAY);
         // The in-progress day lives in week[0]; extract it as the "actual so far" series.
@@ -1045,9 +1060,17 @@ const database_init = async () => {
         await conn.query("CREATE INDEX IF NOT EXISTS idx_wifi_insert_time ON wifi_data (insert_time)");
         // Composite index for the per-building queries: filters by a set of apnames AND a recent
         // insert_time range. Lets MariaDB seek straight to each AP's recent rows instead of scanning
-        // that AP's entire history (the table has ~18M rows).
+        // that AP's entire history (the table has ~18M rows). Used by the "current" snapshot query.
         await conn.query(
             "CREATE INDEX IF NOT EXISTS idx_wifi_apname_insert ON wifi_data (apname, insert_time)"
+        );
+        // Covering index for the history & prediction aggregations, which filter by (apname, online,
+        // insert_time) and then read the user-count columns. Including those columns makes the scan
+        // index-only — no per-row lookups into the 18M-row table, which is the dominant cost for the
+        // prediction's multi-week range scan.
+        await conn.query(
+            `CREATE INDEX IF NOT EXISTS idx_wifi_cover
+             ON wifi_data (apname, online, insert_time, users_2_4_ghz, users_5_ghz)`
         );
 
         await conn.query(
