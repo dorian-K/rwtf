@@ -554,11 +554,12 @@ function GymStuff() {
                         <Link href="/trends" className="btn btn-primary">
                             View Historical Trends
                         </Link>
-                        {isAachen && (
-                            <Link href="/wifi" className="btn btn-outline-primary">
-                                WiFi Usage by Building
-                            </Link>
-                        )}
+                        <Link
+                            href="/wifi"
+                            className={"btn btn-outline-primary " + (isAachen ? "" : "disabled")}
+                        >
+                            WiFi Usage by Building
+                        </Link>
                     </div>
                     <h4>Legend</h4>
                     <small>
