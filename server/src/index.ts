@@ -770,6 +770,8 @@ app.get("/api/v1/wifi/buildings", async (req, res) => {
 // Returns current aggregate + hourly history for a building.
 // Handles new/disabled APs: absent APs produce no rows (not counted); offline APs filtered by online=1.
 // Multiple uploads per hour are averaged per AP before summing, so the total is stable.
+// Performance: resolves the building's AP set from the small metadata table first, then filters
+// wifi_data by that concrete apname list (idx_apname) + a time bound — never scans full history.
 app.get("/api/v1/wifi/building", async (req, res) => {
     const building = req.query.building as string;
     if (!building) {
@@ -779,22 +781,48 @@ app.get("/api/v1/wifi/building", async (req, res) => {
     let hours = parseInt((req.query.hours as string) || "24");
     if (isNaN(hours) || hours < 1 || hours > 168) hours = 24;
 
+    // "Current" snapshot window: an AP that hasn't reported within this many hours is treated as
+    // gone (handles disabled routers — they simply drop out of the current totals).
+    const CURRENT_WINDOW_HOURS = 3;
+
     let conn;
     try {
         conn = await getConnection();
         const t0 = new Date();
 
-        // Use latest metadata entry per AP (highest id) to assign each AP to its current building.
-        // This handles APs whose building label changed over time.
-        const AP_BUILDING_SUBQUERY = `
-            SELECT wan.apname, wan.building
-            FROM wifi_data_apnames wan
-            INNER JOIN (SELECT apname, MAX(id) as max_id FROM wifi_data_apnames GROUP BY apname) latest
-                ON wan.apname = latest.apname AND wan.id = latest.max_id
-        `;
+        // Step 1: resolve which APs currently belong to this building. The metadata table is small
+        // (one row per apname/location/building/org combo), so this is cheap. Using the latest
+        // metadata row per AP (highest id) handles APs whose building label changed over time.
+        const apRows = await conn.query(
+            `SELECT wan.apname
+             FROM wifi_data_apnames wan
+             INNER JOIN (SELECT apname, MAX(id) AS max_id FROM wifi_data_apnames GROUP BY apname) latest
+                 ON wan.apname = latest.apname AND wan.id = latest.max_id
+             WHERE wan.building = ?`,
+            [building]
+        );
+        const apnames: string[] = apRows.map((r: any) => r.apname);
 
-        // Hourly history: average per AP per bucket first (handles multiple uploads in the same
-        // hour), then sum across APs (absent APs contribute nothing — correct for gaps).
+        // No APs map to this building → nothing to aggregate. Return an empty-but-valid payload
+        // instead of running heavy queries with an empty IN () list.
+        if (apnames.length === 0) {
+            res.setHeader("Cache-Control", "public, max-age=60");
+            res.json({
+                building,
+                current: { total_users: 0, active_aps: 0, total_aps: 0, last_updated: null },
+                history: [],
+                queryMs: new Date().getTime() - t0.getTime(),
+            });
+            return;
+        }
+
+        // Build a parameterized IN (?, ?, …) list. Filtering wifi_data by this concrete AP set lets
+        // MariaDB use idx_apname instead of scanning the whole history table.
+        const inPlaceholders = apnames.map(() => "?").join(",");
+
+        // Step 2 — hourly history: average per AP per bucket first (handles multiple uploads within
+        // the same hour), then sum across APs. Absent APs contribute no rows, which is correct for
+        // gaps; offline rows are filtered out by online = 1.
         const historyRows = await conn.query(
             `SELECT
                 time_bucket,
@@ -802,35 +830,39 @@ app.get("/api/v1/wifi/building", async (req, res) => {
                 COUNT(*) AS active_aps
             FROM (
                 SELECT
-                    DATE_FORMAT(wd.insert_time, '%Y-%m-%dT%H:00:00') AS time_bucket,
-                    wd.apname,
-                    AVG(wd.users_2_4_ghz + wd.users_5_ghz) AS ap_avg_users
-                FROM wifi_data wd
-                INNER JOIN (${AP_BUILDING_SUBQUERY}) wan ON wd.apname = wan.apname
-                WHERE wan.building = ?
-                  AND wd.online = 1
-                  AND wd.insert_time >= DATE_SUB(NOW(), INTERVAL ? HOUR)
-                GROUP BY time_bucket, wd.apname
+                    DATE_FORMAT(insert_time, '%Y-%m-%dT%H:00:00') AS time_bucket,
+                    apname,
+                    AVG(users_2_4_ghz + users_5_ghz) AS ap_avg_users
+                FROM wifi_data
+                WHERE apname IN (${inPlaceholders})
+                  AND online = 1
+                  AND insert_time >= DATE_SUB(NOW(), INTERVAL ? HOUR)
+                GROUP BY time_bucket, apname
             ) AS per_ap
             GROUP BY time_bucket
             ORDER BY time_bucket`,
-            [building, hours]
+            [...apnames, hours]
         );
 
-        // Current state: for each AP pick its most-recently-inserted row, then aggregate.
+        // Step 3 — current state: take each AP's most recent row within the snapshot window, then
+        // aggregate. APs that haven't reported within CURRENT_WINDOW_HOURS are excluded entirely, so
+        // disabled routers naturally drop out; an AP whose latest row is offline counts toward
+        // total_aps but not active_aps / total_users.
         const currentRows = await conn.query(
             `SELECT
                 SUM(CASE WHEN wd.online = 1 THEN wd.users_2_4_ghz + wd.users_5_ghz ELSE 0 END) AS total_users,
                 SUM(CASE WHEN wd.online = 1 THEN 1 ELSE 0 END) AS active_aps,
-                COUNT(DISTINCT wd.apname) AS total_aps,
+                COUNT(*) AS total_aps,
                 MAX(wd.insert_time) AS last_updated
             FROM wifi_data wd
             INNER JOIN (
-                SELECT apname, MAX(insert_time) AS max_insert FROM wifi_data GROUP BY apname
-            ) latest ON wd.apname = latest.apname AND wd.insert_time = latest.max_insert
-            INNER JOIN (${AP_BUILDING_SUBQUERY}) wan ON wd.apname = wan.apname
-            WHERE wan.building = ?`,
-            [building]
+                SELECT apname, MAX(insert_time) AS max_insert
+                FROM wifi_data
+                WHERE apname IN (${inPlaceholders})
+                  AND insert_time >= DATE_SUB(NOW(), INTERVAL ? HOUR)
+                GROUP BY apname
+            ) latest ON wd.apname = latest.apname AND wd.insert_time = latest.max_insert`,
+            [...apnames, CURRENT_WINDOW_HOURS]
         );
 
         const cur = currentRows[0] ?? {};
@@ -885,6 +917,12 @@ const database_init = async () => {
         await conn.query("CREATE INDEX IF NOT EXISTS idx_insert_time ON wifi_data (last_online)");
         await conn.query("CREATE INDEX IF NOT EXISTS idx_apname ON wifi_data (apname)");
         await conn.query("CREATE INDEX IF NOT EXISTS idx_wifi_insert_time ON wifi_data (insert_time)");
+        // Composite index for the per-building queries: filters by a set of apnames AND a recent
+        // insert_time range. Lets MariaDB seek straight to each AP's recent rows instead of scanning
+        // that AP's entire history (the table has ~18M rows).
+        await conn.query(
+            "CREATE INDEX IF NOT EXISTS idx_wifi_apname_insert ON wifi_data (apname, insert_time)"
+        );
 
         await conn.query(
             `CREATE TABLE IF NOT EXISTS wifi_data_apnames (
