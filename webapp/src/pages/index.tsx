@@ -446,7 +446,7 @@ function DataExportForm() {
 
         // Backend limit: 31 days
         if (diffDays > 31) {
-            setError("Date range cannot exceed 31 days");
+            setError(`Date range cannot exceed 31 days. Contact dorian.koch${"@"}rwth-aachen.de`);
             return;
         }
         if (diffDays < 0) {
