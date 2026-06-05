@@ -1,30 +1,56 @@
-export interface GymDataPiece {
-    auslastung: number;
-    created_at: string;
+// Generic time-series day-prediction engine.
+//
+// Extracted from the original gym predictor so it can be reused for any metric that is a single
+// numeric value sampled over time (gym occupancy, WiFi devices per building, …). The only domain
+// coupling left here is the shape { value, created_at }; callers adapt their own field names.
+//
+// The `DayWindow` controls which part of the day is predicted: the gym only operates 06:00–24:00,
+// whereas WiFi runs the full 24 h. Everything else (weighting, interpolation, closest-match) is
+// identical to the original gym implementation.
+
+export interface TimeSeriesPiece {
+    value: number;
+    // Accepts anything `new Date()` understands (ISO string, Date, or epoch ms). Prediction lines
+    // emit epoch-ms numbers here, matching the original gym behaviour.
+    created_at: any;
 }
 
-export interface GymDataFullWeek {
-    days: GymDataPiece[][];
+export interface FullWeek {
+    days: TimeSeriesPiece[][];
     weight: number;
 }
+
+export interface DayWindow {
+    startHour: number; // inclusive, e.g. 6 for the gym
+    endHour: number; // exclusive, e.g. 24 for end-of-day
+}
+
+export const FULL_DAY: DayWindow = { startHour: 0, endHour: 24 };
+
+export type PredictionMethod = "closest" | "average" | "median" | "dayofweek";
 
 interface WeightedDayData {
-    data: GymDataPiece[];
+    data: TimeSeriesPiece[];
     weight: number;
 }
 
-// Get day of week from a date string (0 = Sunday, 1 = Monday, etc.)
-function getDayOfWeek(dateStr: string): number {
+// Get day of week from a date value (0 = Sunday, 1 = Monday, etc.)
+function getDayOfWeek(dateStr: any): number {
     return new Date(dateStr).getDay();
 }
 
-function normalizeDataToTimeOfDay(data: GymDataPiece[], minX = new Date().setHours(6, 0, 0, 0)) {
+// Reference midnight (today) used as the base date when collapsing all samples onto one day.
+function dayBase(): number {
+    return new Date().setHours(0, 0, 0, 0);
+}
+
+function normalizeDataToTimeOfDay(data: TimeSeriesPiece[], base: number) {
     return data
         .map((g) => {
             const gDate = new Date(g.created_at);
             return {
                 ...g,
-                created_at: new Date(minX).setHours(
+                created_at: new Date(base).setHours(
                     gDate.getHours(),
                     gDate.getMinutes(),
                     gDate.getSeconds(),
@@ -35,13 +61,13 @@ function normalizeDataToTimeOfDay(data: GymDataPiece[], minX = new Date().setHou
         .sort((a, b) => a.created_at - b.created_at);
 }
 
-function makeDayKey(dateStr: string) {
+function makeDayKey(dateStr: any) {
     const date = new Date(dateStr);
     return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
 }
 
-function flattenWeeksToDays(gymHist: GymDataFullWeek[]): WeightedDayData[] {
-    return gymHist.flatMap((week) =>
+function flattenWeeksToDays(hist: FullWeek[]): WeightedDayData[] {
+    return hist.flatMap((week) =>
         week.days
             .filter((day) => day.length > 0)
             .map((day) => ({
@@ -51,22 +77,22 @@ function flattenWeeksToDays(gymHist: GymDataFullWeek[]): WeightedDayData[] {
     );
 }
 
-function getDaysForWeekday(gymHist: GymDataFullWeek[], dayOfWeek: number): WeightedDayData[] {
-    return flattenWeeksToDays(gymHist).filter(
+function getDaysForWeekday(hist: FullWeek[], dayOfWeek: number): WeightedDayData[] {
+    return flattenWeeksToDays(hist).filter(
         (day) => day.data.length > 0 && getDayOfWeek(day.data[0].created_at) === dayOfWeek
     );
 }
 
-function averageDays(dayData: WeightedDayData[], useMedian = false) {
-    const minX = new Date().setHours(6, 0, 0, 0);
-    const maxX = new Date().setHours(23, 59, 59, 999);
+function averageDays(dayData: WeightedDayData[], window: DayWindow, useMedian = false) {
+    const base = dayBase();
+    const minX = new Date(base).setHours(window.startHour, 0, 0, 0);
+    const hrs = window.endHour - window.startHour;
     const historicAvg = [];
     const historicData = dayData.map((day) => ({
-        data: normalizeDataToTimeOfDay(day.data, minX),
+        data: normalizeDataToTimeOfDay(day.data, base),
         weight: day.weight,
     }));
 
-    const hrs = Math.round((maxX - minX) / (1000 * 60 * 60));
     const lastVals = new Array(historicData.length).fill(0);
     for (let min = 0; min < hrs * 60; min += 5) {
         const time = +new Date(minX + min * 60 * 1000);
@@ -93,20 +119,20 @@ function averageDays(dayData: WeightedDayData[], useMedian = false) {
                 if (x < 0 || x > 1) {
                     console.error("x out of bounds", x);
                 } else {
-                    const value = a.auslastung + x * (b.auslastung - a.auslastung);
+                    const value = a.value + x * (b.value - a.value);
                     values.push(value);
                     weights.push(weight);
                     totalWeight += weight;
                 }
             } else if (nextTime === 0) {
                 if (Math.abs(day[nextTime].created_at - time) < 1000 * 60 * 15) {
-                    values.push(day[nextTime].auslastung);
+                    values.push(day[nextTime].value);
                     weights.push(weight);
                     totalWeight += weight;
                 }
             } else if (nextTime === day.length) {
                 if (Math.abs(day[nextTime - 1].created_at - time) < 1000 * 60 * 15) {
-                    values.push(day[nextTime - 1].auslastung);
+                    values.push(day[nextTime - 1].value);
                     weights.push(weight);
                     totalWeight += weight;
                 }
@@ -138,44 +164,58 @@ function averageDays(dayData: WeightedDayData[], useMedian = false) {
             }
         }
 
-        historicAvg.push({ created_at: time, auslastung: avgValue });
+        historicAvg.push({ created_at: time, value: avgValue });
     }
 
     return historicAvg;
 }
 
-function getCurrentDayData(currentWeek: GymDataFullWeek, currentDayOfWeek: number): GymDataPiece[] {
+function getCurrentDayData(currentWeek: FullWeek, currentDayOfWeek: number): TimeSeriesPiece[] {
     const matchingDay = currentWeek.days.find(
         (day) => day.length > 0 && getDayOfWeek(day[0].created_at) === currentDayOfWeek
     );
     return matchingDay ?? [];
 }
 
-function makeAverageLine(gymHist: GymDataFullWeek[], currentDayOfWeek: number, useMedian = false) {
-    return averageDays(getDaysForWeekday(gymHist, currentDayOfWeek), useMedian);
+function makeAverageLine(
+    hist: FullWeek[],
+    currentDayOfWeek: number,
+    window: DayWindow = FULL_DAY,
+    useMedian = false
+) {
+    return averageDays(getDaysForWeekday(hist, currentDayOfWeek), window, useMedian);
 }
 
-function makeDayOfWeekLine(gymHist: GymDataFullWeek[], currentDayOfWeek: number) {
-    const filteredData = getDaysForWeekday(gymHist, currentDayOfWeek);
+function makeDayOfWeekLine(
+    hist: FullWeek[],
+    currentDayOfWeek: number,
+    window: DayWindow = FULL_DAY
+) {
+    const filteredData = getDaysForWeekday(hist, currentDayOfWeek);
     if (filteredData.length === 0) {
-        return averageDays(flattenWeeksToDays(gymHist));
+        return averageDays(flattenWeeksToDays(hist), window);
     }
 
-    return averageDays(filteredData);
+    return averageDays(filteredData, window);
 }
 
-function makeClosestLine(gymHist: GymDataFullWeek[], currentWeek: GymDataFullWeek, currentDayOfWeek: number) {
+function makeClosestLine(
+    hist: FullWeek[],
+    currentWeek: FullWeek,
+    currentDayOfWeek: number,
+    window: DayWindow = FULL_DAY
+) {
     const MINIMUM_COMPARE_POINTS = 6;
     const DIFFERENT_WEEKDAY_WEIGHT_FACTOR = 2;
     const currentDayData = getCurrentDayData(currentWeek, currentDayOfWeek);
 
-    if (currentDayData.length < MINIMUM_COMPARE_POINTS || gymHist.length <= 3) {
-        return makeAverageLine(gymHist, currentDayOfWeek);
+    if (currentDayData.length < MINIMUM_COMPARE_POINTS || hist.length <= 3) {
+        return makeAverageLine(hist, currentDayOfWeek, window);
     }
 
-    const minX = new Date().setHours(6, 0, 0, 0);
-    const normalizedCurrentDay = normalizeDataToTimeOfDay(currentDayData, minX);
-    const candidateDays = flattenWeeksToDays(gymHist);
+    const base = dayBase();
+    const normalizedCurrentDay = normalizeDataToTimeOfDay(currentDayData, base);
+    const candidateDays = flattenWeeksToDays(hist);
 
     const distances = candidateDays.map((candidateDay) => {
         let totalError = 0;
@@ -186,7 +226,7 @@ function makeClosestLine(gymHist: GymDataFullWeek[], currentWeek: GymDataFullWee
             return { day: candidateDay, distance: Infinity };
         }
 
-        const normalizedHistoricalDay = normalizeDataToTimeOfDay(candidateDay.data, minX);
+        const normalizedHistoricalDay = normalizeDataToTimeOfDay(candidateDay.data, base);
         const interpolatedVals = [];
 
         for (const currentPoint of normalizedCurrentDay) {
@@ -206,7 +246,7 @@ function makeClosestLine(gymHist: GymDataFullWeek[], currentWeek: GymDataFullWee
                 const x = (time - a.created_at) / (b.created_at - a.created_at);
 
                 if (x >= 0 && x <= 1) {
-                    interpolatedValue = a.auslastung + x * (b.auslastung - a.auslastung);
+                    interpolatedValue = a.value + x * (b.value - a.value);
                 }
             }
 
@@ -216,7 +256,7 @@ function makeClosestLine(gymHist: GymDataFullWeek[], currentWeek: GymDataFullWee
         let sumXY = 0;
         let sumXX = 0;
         for (let i = 0; i < normalizedCurrentDay.length; i++) {
-            const y = normalizedCurrentDay[i].auslastung;
+            const y = normalizedCurrentDay[i].value;
             const x = interpolatedVals[i];
             if (x !== null) {
                 sumXY += x * y;
@@ -229,7 +269,7 @@ function makeClosestLine(gymHist: GymDataFullWeek[], currentWeek: GymDataFullWee
         m = Math.max(m, 0.5);
 
         for (let i = 0; i < normalizedCurrentDay.length; i++) {
-            const y = normalizedCurrentDay[i].auslastung;
+            const y = normalizedCurrentDay[i].value;
             const x = interpolatedVals[i];
             if (x !== null) {
                 const predictedY = m * x;
@@ -257,7 +297,7 @@ function makeClosestLine(gymHist: GymDataFullWeek[], currentWeek: GymDataFullWee
             day: {
                 data: candidateDay.data.map((d) => ({
                     ...d,
-                    auslastung: d.auslastung * m,
+                    value: d.value * m,
                 })),
                 weight: candidateDay.weight,
             },
@@ -277,11 +317,11 @@ function makeClosestLine(gymHist: GymDataFullWeek[], currentWeek: GymDataFullWee
         return [];
     }
 
-    return averageDays(closestDays);
+    return averageDays(closestDays, window);
 }
 
-function buildFullWeek(data: GymDataPiece[], weight: number): GymDataFullWeek {
-    const dayMap = new Map<string, GymDataPiece[]>();
+function buildFullWeek(data: TimeSeriesPiece[], weight: number): FullWeek {
+    const dayMap = new Map<string, TimeSeriesPiece[]>();
 
     for (const point of data) {
         const key = makeDayKey(point.created_at);
@@ -295,12 +335,38 @@ function buildFullWeek(data: GymDataPiece[], weight: number): GymDataFullWeek {
 
     return {
         days: Array.from(dayMap.values()).map((day) =>
-            day.sort(
-                (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-            )
+            day.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
         ),
         weight,
     };
 }
 
-export { buildFullWeek, makeAverageLine, makeClosestLine, makeDayOfWeekLine };
+// Dispatch to the requested prediction method, mirroring the original gym switch:
+// "closest" compares today against history (week[0] is the in-progress week); the rest aggregate.
+function predictLine(
+    method: PredictionMethod,
+    weeks: FullWeek[],
+    currentDayOfWeek: number,
+    window: DayWindow = FULL_DAY
+): TimeSeriesPiece[] {
+    switch (method) {
+        case "average":
+            return makeAverageLine(weeks, currentDayOfWeek, window);
+        case "median":
+            return makeAverageLine(weeks, currentDayOfWeek, window, true);
+        case "dayofweek":
+            return makeDayOfWeekLine(weeks, currentDayOfWeek, window);
+        case "closest":
+        default:
+            return makeClosestLine(weeks.slice(1), weeks[0], currentDayOfWeek, window);
+    }
+}
+
+export {
+    buildFullWeek,
+    makeAverageLine,
+    makeClosestLine,
+    makeDayOfWeekLine,
+    getCurrentDayData,
+    predictLine,
+};

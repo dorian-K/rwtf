@@ -81,6 +81,20 @@ export interface WifiBuildingResponse {
     queryMs: number;
 }
 
+export interface WifiSeriesPoint {
+    value: number;
+    // Actual points arrive as datetime strings; predicted points as epoch-ms numbers.
+    created_at: string | number;
+}
+
+export interface WifiBuildingPredictResponse {
+    building: string;
+    dataToday: WifiSeriesPoint[];
+    interpLine: WifiSeriesPoint[];
+    method: PredictionMethod;
+    dayoffset: number;
+}
+
 export class Backend {
     fetch(input: string, init?: RequestInit): Promise<Response> {
         return fetch(input, init);
@@ -160,6 +174,17 @@ export class Backend {
         return this.processResponse(
             this.fetch(
                 `/api/v1/wifi/building?building=${encodeURIComponent(building)}&hours=${hours}`,
+            ),
+        );
+    }
+
+    getWifiBuildingPredict(
+        building: string,
+        method: PredictionMethod = "closest",
+    ): Promise<WifiBuildingPredictResponse> {
+        return this.processResponse(
+            this.fetch(
+                `/api/v1/wifi/building_predict?building=${encodeURIComponent(building)}&method=${method}`,
             ),
         );
     }

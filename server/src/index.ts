@@ -5,7 +5,18 @@ import { PoolConnection } from "mariadb";
 import { SAMPLE } from "./sample_data.js";
 import { downloadStreamFile, isAachener } from "./study.js";
 import { rateLimit } from "express-rate-limit";
-import { buildFullWeek, GymDataFullWeek, makeAverageLine, makeClosestLine, makeDayOfWeekLine } from "./gym_math.js";
+import {
+    buildFullWeek,
+    FullWeek,
+    predictLine,
+    PredictionMethod,
+    DayWindow,
+    FULL_DAY,
+    getCurrentDayData,
+} from "./prediction.js";
+
+// The gym is only open ~06:00–24:00, so its predictions cover that window. WiFi uses the full day.
+const GYM_WINDOW: DayWindow = { startHour: 6, endHour: 24 };
 import "dotenv/config";
 import { parse } from "date-fns";
 import XXH from "xxhashjs";
@@ -145,9 +156,11 @@ app.get("/api/v1/gym_interpline", async (req, res) => {
         // Calculate prediction line based on selected method
         const methodParam = (req.query.method as string) || "closest";
         const validMethods = ["closest", "average", "median", "dayofweek"];
-        const method = validMethods.includes(methodParam) ? methodParam : "closest";
+        const method = (
+            validMethods.includes(methodParam) ? methodParam : "closest"
+        ) as PredictionMethod;
 
-        let weeks: GymDataFullWeek[] = [];
+        let weeks: FullWeek[] = [];
         for (let i = 0; i <= NUM_WEEKS; i++) {
             const weekDate = new Date(targetDate);
             weekDate.setDate(weekDate.getDate() - i * 7);
@@ -169,36 +182,22 @@ app.get("/api/v1/gym_interpline", async (req, res) => {
                 break; // very little data
             }
 
+            // Adapt the gym's `auslastung` field to the engine's neutral `value` field.
             const sanitized = rows.map((row: any) => {
                 return {
-                    auslastung: row.auslastung,
+                    value: row.auslastung,
                     created_at: row.created_at,
                 };
             });
             weeks.push(buildFullWeek(sanitized, i <= 4 ? 3 : 1));
         }
 
-        let interpLine;
-        
-        switch (method) {
-            case "average":
-                // Simple weighted average of all historical weeks
-                interpLine = makeAverageLine(weeks, currentDayOfWeek);
-                break;
-            case "median":
-                // Weighted average using median (more robust to outliers)
-                interpLine = makeAverageLine(weeks, currentDayOfWeek, true);
-                break;
-            case "dayofweek":
-                // Average only data from the same day of week
-                interpLine = makeDayOfWeekLine(weeks, currentDayOfWeek);
-                break;
-            case "closest":
-            default:
-                // Find most similar historical days to the selected day and average the best matches.
-                // Same-weekday history is preferred, but other weekdays can still win if they are much closer.
-                interpLine = makeClosestLine(weeks.slice(1), weeks[0], currentDayOfWeek);
-        }
+        const predicted = predictLine(method, weeks, currentDayOfWeek, GYM_WINDOW);
+        // Map back to the gym's wire format (`auslastung`) so the frontend is unchanged.
+        const interpLine = predicted.map((p) => ({
+            auslastung: p.value,
+            created_at: p.created_at,
+        }));
 
         // calculate all time high
         let allTimeHigh = await conn.query(
@@ -746,6 +745,53 @@ app.get("/api/v1/gym/hourly-pattern", async (req, res) => {
     }
 });
 
+// Resolve which APs currently belong to a building, using each AP's latest metadata row (highest
+// id) so APs whose building label changed over time are attributed to their current building.
+async function resolveBuildingApnames(conn: PoolConnection, building: string): Promise<string[]> {
+    const apRows = await conn.query(
+        `SELECT wan.apname
+         FROM wifi_data_apnames wan
+         INNER JOIN (SELECT apname, MAX(id) AS max_id FROM wifi_data_apnames GROUP BY apname) latest
+             ON wan.apname = latest.apname AND wan.id = latest.max_id
+         WHERE wan.building = ?`,
+        [building]
+    );
+    return apRows.map((r: any) => r.apname);
+}
+
+// Aggregate a building into a single device-count time series over [startDate, endDate]: average
+// each AP within 5-minute buckets (smooths multiple uploads), then sum across online APs so each
+// bucket is "total connected devices in the building". Absent APs contribute nothing (correct for
+// gaps); offline rows are excluded. Returns points shaped for the prediction engine.
+async function fetchBuildingSeries(
+    conn: PoolConnection,
+    apnames: string[],
+    startDate: Date,
+    endDate: Date
+): Promise<{ value: number; created_at: Date }[]> {
+    if (apnames.length === 0) return [];
+    const inPlaceholders = apnames.map(() => "?").join(",");
+    const rows = await conn.query(
+        `SELECT bucket AS created_at, SUM(ap_avg) AS value
+         FROM (
+            SELECT
+                FROM_UNIXTIME(FLOOR(UNIX_TIMESTAMP(insert_time) / 300) * 300) AS bucket,
+                apname,
+                AVG(users_2_4_ghz + users_5_ghz) AS ap_avg
+            FROM wifi_data
+            WHERE apname IN (${inPlaceholders})
+              AND online = 1
+              AND insert_time >= ? AND insert_time <= ?
+            GROUP BY bucket, apname
+         ) per_ap
+         GROUP BY bucket
+         ORDER BY bucket`,
+        [...apnames, startDate, endDate]
+    );
+    // DECIMAL aggregates can arrive as strings — coerce to Number for the math engine.
+    return rows.map((r: any) => ({ value: Number(r.value), created_at: r.created_at }));
+}
+
 // GET /api/v1/wifi/buildings — list all distinct buildings that have AP metadata
 app.get("/api/v1/wifi/buildings", async (req, res) => {
     let conn;
@@ -790,18 +836,9 @@ app.get("/api/v1/wifi/building", async (req, res) => {
         conn = await getConnection();
         const t0 = new Date();
 
-        // Step 1: resolve which APs currently belong to this building. The metadata table is small
-        // (one row per apname/location/building/org combo), so this is cheap. Using the latest
-        // metadata row per AP (highest id) handles APs whose building label changed over time.
-        const apRows = await conn.query(
-            `SELECT wan.apname
-             FROM wifi_data_apnames wan
-             INNER JOIN (SELECT apname, MAX(id) AS max_id FROM wifi_data_apnames GROUP BY apname) latest
-                 ON wan.apname = latest.apname AND wan.id = latest.max_id
-             WHERE wan.building = ?`,
-            [building]
-        );
-        const apnames: string[] = apRows.map((r: any) => r.apname);
+        // Step 1: resolve which APs currently belong to this building (cheap — metadata table is
+        // small). See resolveBuildingApnames for how renamed/moved APs are handled.
+        const apnames = await resolveBuildingApnames(conn, building);
 
         // No APs map to this building → nothing to aggregate. Return an empty-but-valid payload
         // instead of running heavy queries with an empty IN () list.
@@ -882,6 +919,95 @@ app.get("/api/v1/wifi/building", async (req, res) => {
                 total_users: Number(r.total_users),
                 active_aps: Number(r.active_aps),
             })),
+            queryMs,
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: true });
+    } finally {
+        if (conn) conn.end();
+    }
+});
+
+// GET /api/v1/wifi/building_predict?building=X&method=closest&dayoffset=0
+// Predicts the device-count curve for a building's current day, mirroring the gym predictor.
+// Returns the actual series so far today plus the predicted line for the full day.
+app.get("/api/v1/wifi/building_predict", async (req, res) => {
+    const building = req.query.building as string;
+    if (!building) {
+        res.status(400).json({ error: true, msg: "building is required" });
+        return;
+    }
+
+    let dayoffset = req.query.dayoffset ? parseInt(req.query.dayoffset as string) : 0;
+    if (isNaN(dayoffset) || dayoffset < 0 || dayoffset > 6) dayoffset = 0;
+
+    const methodParam = (req.query.method as string) || "closest";
+    const validMethods = ["closest", "average", "median", "dayofweek"];
+    const method = (
+        validMethods.includes(methodParam) ? methodParam : "closest"
+    ) as PredictionMethod;
+
+    // WiFi history is shallow compared to the gym (only a few months), so cap the lookback and bail
+    // out once we hit consecutive empty weeks instead of scanning far into a non-existent past.
+    const NUM_WEEKS = 26;
+
+    let conn;
+    try {
+        conn = await getConnection();
+        const t0 = new Date();
+
+        const apnames = await resolveBuildingApnames(conn, building);
+        if (apnames.length === 0) {
+            res.setHeader("Cache-Control", "public, max-age=300");
+            res.json({ building, dataToday: [], interpLine: [], method, dayoffset });
+            return;
+        }
+
+        const targetDate = new Date();
+        targetDate.setDate(targetDate.getDate() + dayoffset);
+        const currentDayOfWeek = targetDate.getDay();
+
+        const weeks: FullWeek[] = [];
+        let emptyStreak = 0;
+        for (let i = 0; i <= NUM_WEEKS; i++) {
+            const weekDate = new Date(targetDate);
+            weekDate.setDate(weekDate.getDate() - i * 7);
+
+            const startDate = new Date(weekDate);
+            startDate.setDate(startDate.getDate() - currentDayOfWeek);
+            startDate.setHours(0, 0, 0, 0);
+
+            const endDate = new Date(weekDate);
+            endDate.setDate(endDate.getDate() + (6 - currentDayOfWeek));
+            endDate.setHours(23, 59, 59, 999);
+
+            const series = await fetchBuildingSeries(conn, apnames, startDate, endDate);
+
+            // Stop after two consecutive empty weeks (older than the current week) — the data simply
+            // doesn't go back that far. The current week (i === 0) is always kept.
+            if (i > 0 && series.length === 0) {
+                if (++emptyStreak >= 2) break;
+            } else {
+                emptyStreak = 0;
+            }
+
+            weeks.push(buildFullWeek(series, i <= 4 ? 3 : 1));
+        }
+
+        const predicted = predictLine(method, weeks, currentDayOfWeek, FULL_DAY);
+        // The in-progress day lives in week[0]; extract it as the "actual so far" series.
+        const dataToday = getCurrentDayData(weeks[0], currentDayOfWeek);
+
+        const queryMs = new Date().getTime() - t0.getTime();
+        res.setHeader("Cache-Control", "public, max-age=" + 60 * 10); // 10 minutes
+        res.setHeader("Server-Timing", `db;dur=${queryMs}`);
+        res.json({
+            building,
+            dataToday,
+            interpLine: predicted,
+            method,
+            dayoffset,
             queryMs,
         });
     } catch (err) {
