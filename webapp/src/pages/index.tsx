@@ -556,7 +556,7 @@ function GymStuff() {
                         </Link>
                         <Link
                             href="/wifi"
-                            className={"btn btn-outline-primary " + (isAachen ? "" : "disabled")}
+                            className={"btn btn-primary " + (isAachen ? "" : "disabled")}
                         >
                             WiFi Usage by Building
                         </Link>
