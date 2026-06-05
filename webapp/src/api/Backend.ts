@@ -61,6 +61,26 @@ export interface HourlyPatternResponse {
 
 export type PredictionMethod = "closest" | "average" | "median" | "dayofweek";
 
+export interface WifiBuildingCurrent {
+    total_users: number;
+    active_aps: number;
+    total_aps: number;
+    last_updated: string | null;
+}
+
+export interface WifiBuildingHistoryPoint {
+    time: string;
+    total_users: number;
+    active_aps: number;
+}
+
+export interface WifiBuildingResponse {
+    building: string;
+    current: WifiBuildingCurrent;
+    history: WifiBuildingHistoryPoint[];
+    queryMs: number;
+}
+
 export class Backend {
     fetch(input: string, init?: RequestInit): Promise<Response> {
         return fetch(input, init);
@@ -130,5 +150,17 @@ export class Backend {
 
     getGymHourlyPattern(): Promise<HourlyPatternResponse> {
         return this.processResponse(this.fetch("/api/v1/gym/hourly-pattern"));
+    }
+
+    getWifiBuildings(): Promise<{ buildings: string[] }> {
+        return this.processResponse(this.fetch("/api/v1/wifi/buildings"));
+    }
+
+    getWifiBuilding(building: string, hours: number = 24): Promise<WifiBuildingResponse> {
+        return this.processResponse(
+            this.fetch(
+                `/api/v1/wifi/building?building=${encodeURIComponent(building)}&hours=${hours}`,
+            ),
+        );
     }
 }

@@ -746,6 +746,120 @@ app.get("/api/v1/gym/hourly-pattern", async (req, res) => {
     }
 });
 
+// GET /api/v1/wifi/buildings — list all distinct buildings that have AP metadata
+app.get("/api/v1/wifi/buildings", async (req, res) => {
+    let conn;
+    try {
+        conn = await getConnection();
+        const rows = await conn.query(
+            `SELECT DISTINCT building FROM wifi_data_apnames
+             WHERE building IS NOT NULL AND building != ''
+             ORDER BY building`
+        );
+        res.setHeader("Cache-Control", "public, max-age=300");
+        res.json({ buildings: rows.map((r: any) => r.building) });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: true });
+    } finally {
+        if (conn) conn.end();
+    }
+});
+
+// GET /api/v1/wifi/building?building=X&hours=24
+// Returns current aggregate + hourly history for a building.
+// Handles new/disabled APs: absent APs produce no rows (not counted); offline APs filtered by online=1.
+// Multiple uploads per hour are averaged per AP before summing, so the total is stable.
+app.get("/api/v1/wifi/building", async (req, res) => {
+    const building = req.query.building as string;
+    if (!building) {
+        res.status(400).json({ error: true, msg: "building is required" });
+        return;
+    }
+    let hours = parseInt((req.query.hours as string) || "24");
+    if (isNaN(hours) || hours < 1 || hours > 168) hours = 24;
+
+    let conn;
+    try {
+        conn = await getConnection();
+        const t0 = new Date();
+
+        // Use latest metadata entry per AP (highest id) to assign each AP to its current building.
+        // This handles APs whose building label changed over time.
+        const AP_BUILDING_SUBQUERY = `
+            SELECT wan.apname, wan.building
+            FROM wifi_data_apnames wan
+            INNER JOIN (SELECT apname, MAX(id) as max_id FROM wifi_data_apnames GROUP BY apname) latest
+                ON wan.apname = latest.apname AND wan.id = latest.max_id
+        `;
+
+        // Hourly history: average per AP per bucket first (handles multiple uploads in the same
+        // hour), then sum across APs (absent APs contribute nothing — correct for gaps).
+        const historyRows = await conn.query(
+            `SELECT
+                time_bucket,
+                ROUND(SUM(ap_avg_users)) AS total_users,
+                COUNT(*) AS active_aps
+            FROM (
+                SELECT
+                    DATE_FORMAT(wd.insert_time, '%Y-%m-%dT%H:00:00') AS time_bucket,
+                    wd.apname,
+                    AVG(wd.users_2_4_ghz + wd.users_5_ghz) AS ap_avg_users
+                FROM wifi_data wd
+                INNER JOIN (${AP_BUILDING_SUBQUERY}) wan ON wd.apname = wan.apname
+                WHERE wan.building = ?
+                  AND wd.online = 1
+                  AND wd.insert_time >= DATE_SUB(NOW(), INTERVAL ? HOUR)
+                GROUP BY time_bucket, wd.apname
+            ) AS per_ap
+            GROUP BY time_bucket
+            ORDER BY time_bucket`,
+            [building, hours]
+        );
+
+        // Current state: for each AP pick its most-recently-inserted row, then aggregate.
+        const currentRows = await conn.query(
+            `SELECT
+                SUM(CASE WHEN wd.online = 1 THEN wd.users_2_4_ghz + wd.users_5_ghz ELSE 0 END) AS total_users,
+                SUM(CASE WHEN wd.online = 1 THEN 1 ELSE 0 END) AS active_aps,
+                COUNT(DISTINCT wd.apname) AS total_aps,
+                MAX(wd.insert_time) AS last_updated
+            FROM wifi_data wd
+            INNER JOIN (
+                SELECT apname, MAX(insert_time) AS max_insert FROM wifi_data GROUP BY apname
+            ) latest ON wd.apname = latest.apname AND wd.insert_time = latest.max_insert
+            INNER JOIN (${AP_BUILDING_SUBQUERY}) wan ON wd.apname = wan.apname
+            WHERE wan.building = ?`,
+            [building]
+        );
+
+        const cur = currentRows[0] ?? {};
+        const queryMs = new Date().getTime() - t0.getTime();
+
+        res.setHeader("Cache-Control", "public, max-age=60");
+        res.json({
+            building,
+            current: {
+                total_users: Number(cur.total_users) || 0,
+                active_aps: Number(cur.active_aps) || 0,
+                total_aps: Number(cur.total_aps) || 0,
+                last_updated: cur.last_updated ?? null,
+            },
+            history: historyRows.map((r: any) => ({
+                time: r.time_bucket,
+                total_users: Number(r.total_users),
+                active_aps: Number(r.active_aps),
+            })),
+            queryMs,
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: true });
+    } finally {
+        if (conn) conn.end();
+    }
+});
+
 app.get("/api", (req, res) => {
     res.send("Hello World!");
 });
@@ -770,6 +884,7 @@ const database_init = async () => {
         );
         await conn.query("CREATE INDEX IF NOT EXISTS idx_insert_time ON wifi_data (last_online)");
         await conn.query("CREATE INDEX IF NOT EXISTS idx_apname ON wifi_data (apname)");
+        await conn.query("CREATE INDEX IF NOT EXISTS idx_wifi_insert_time ON wifi_data (insert_time)");
 
         await conn.query(
             `CREATE TABLE IF NOT EXISTS wifi_data_apnames (
