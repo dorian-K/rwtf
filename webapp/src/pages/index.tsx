@@ -518,8 +518,14 @@ function DataExportForm() {
 }
 
 function GymStuff() {
+    const api = useBackendContext();
     const [embedCode, setEmbedCode] = useState<string>(EMBED_CODE("https://rwtf.dorianko.ch"));
     const [picUrl, setPicUrl] = useState<string>("https://rwtf.dorianko.ch/embed_picture.png");
+    const [isAachen, setIsAachen] = useState<boolean | undefined>(undefined);
+
+    useEffect(() => {
+        api.isAachener().then(setIsAachen);
+    }, [api]);
 
     useEffect(() => {
         // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -548,9 +554,11 @@ function GymStuff() {
                         <Link href="/trends" className="btn btn-primary">
                             View Historical Trends
                         </Link>
-                        <Link href="/wifi" className="btn btn-outline-primary">
-                            WiFi Usage by Building
-                        </Link>
+                        {isAachen && (
+                            <Link href="/wifi" className="btn btn-outline-primary">
+                                WiFi Usage by Building
+                            </Link>
+                        )}
                     </div>
                     <h4>Legend</h4>
                     <small>

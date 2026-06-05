@@ -789,6 +789,10 @@ async function fetchBuildingSeries(
 
 // GET /api/v1/wifi/buildings — list all distinct buildings that have AP metadata
 app.get("/api/v1/wifi/buildings", async (req, res) => {
+    if (!(await isAachener(req, res))) {
+        res.status(403).json({ error: true, msg: "Access restricted to Aachen network" });
+        return;
+    }
     let conn;
     try {
         conn = await getConnection();
@@ -814,6 +818,10 @@ app.get("/api/v1/wifi/buildings", async (req, res) => {
 // Performance: resolves the building's AP set from the small metadata table first, then filters
 // wifi_data by that concrete apname list (idx_apname) + a time bound — never scans full history.
 app.get("/api/v1/wifi/building", async (req, res) => {
+    if (!(await isAachener(req, res))) {
+        res.status(403).json({ error: true, msg: "Access restricted to Aachen network" });
+        return;
+    }
     const building = req.query.building as string;
     if (!building) {
         res.status(400).json({ error: true, msg: "building is required" });
@@ -928,6 +936,10 @@ app.get("/api/v1/wifi/building", async (req, res) => {
 // Predicts the device-count curve for a building's current day, mirroring the gym predictor.
 // Returns the actual series so far today plus the predicted line for the full day.
 app.get("/api/v1/wifi/building_predict", async (req, res) => {
+    if (!(await isAachener(req, res))) {
+        res.status(403).json({ error: true, msg: "Access restricted to Aachen network" });
+        return;
+    }
     const building = req.query.building as string;
     if (!building) {
         res.status(400).json({ error: true, msg: "building is required" });

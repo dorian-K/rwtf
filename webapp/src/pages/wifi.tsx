@@ -318,8 +318,14 @@ export default function WifiPage() {
     const [selectedBuilding, setSelectedBuilding] = useState<string>("");
     const [error, setError] = useState<string | null>(null);
     const api = useBackendContext();
+    const [isAachen, setIsAachen] = useState<boolean | undefined>(undefined);
 
     useEffect(() => {
+        api.isAachener().then(setIsAachen);
+    }, [api]);
+
+    useEffect(() => {
+        if (!isAachen) return;
         api.getWifiBuildings()
             .then((resp) => {
                 setBuildings(resp.buildings);
@@ -327,7 +333,37 @@ export default function WifiPage() {
             })
             .catch((e) => setError(String(e)))
             .finally(() => setBuildingsLoading(false));
-    }, [api]);
+    }, [api, isAachen]);
+
+    if (isAachen === undefined) {
+        return (
+            <div className="container">
+                <div className="mt-3">
+                    <Link href="/" className="btn btn-outline-secondary btn-sm">
+                        ← Back to Gym
+                    </Link>
+                </div>
+                <div className="text-center mt-5">
+                    <div className="spinner-border"></div>
+                </div>
+            </div>
+        );
+    }
+
+    if (!isAachen) {
+        return (
+            <div className="container">
+                <div className="mt-3">
+                    <Link href="/" className="btn btn-outline-secondary btn-sm">
+                        ← Back to Gym
+                    </Link>
+                </div>
+                <div className="alert alert-warning mt-3">
+                    WiFi usage data is only available from within the RWTH / Aachen network.
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="container">
