@@ -813,9 +813,9 @@ app.get("/api/v1/wifi/buildings", async (req, res) => {
 });
 
 // GET /api/v1/wifi/building?building=X&hours=24
-// Returns current aggregate + hourly history for a building.
+// Returns current aggregate + 10-minute history for a building.
 // Handles new/disabled APs: absent APs produce no rows (not counted); offline APs filtered by online=1.
-// Multiple uploads per hour are averaged per AP before summing, so the total is stable.
+// Multiple uploads per 10-minute window are averaged per AP before summing, so the total is stable.
 // Performance: resolves the building's AP set from the small metadata table first, then filters
 // wifi_data by that concrete apname list (idx_apname) + a time bound — never scans full history.
 app.get("/api/v1/wifi/building", async (req, res) => {
@@ -857,9 +857,9 @@ app.get("/api/v1/wifi/building", async (req, res) => {
         // MariaDB use idx_apname instead of scanning the whole history table.
         const inPlaceholders = apnames.map(() => "?").join(",");
 
-        // Step 2 — hourly history: average per AP per bucket first (handles multiple uploads within
-        // the same hour), then sum across APs. Absent APs contribute no rows, which is correct for
-        // gaps; offline rows are filtered out by online = 1.
+        // Step 2 — 10-minute history: average per AP per bucket first (handles multiple uploads
+        // within the same 10-minute window), then sum across APs. Absent APs contribute no rows,
+        // which is correct for gaps; offline rows are filtered out by online = 1.
         const historyRows = await conn.query(
             `SELECT
                 time_bucket,
@@ -867,7 +867,7 @@ app.get("/api/v1/wifi/building", async (req, res) => {
                 COUNT(*) AS active_aps
             FROM (
                 SELECT
-                    DATE_FORMAT(insert_time, '%Y-%m-%dT%H:00:00') AS time_bucket,
+                    FROM_UNIXTIME(FLOOR(UNIX_TIMESTAMP(insert_time) / 600) * 600) AS time_bucket,
                     apname,
                     AVG(users_2_4_ghz + users_5_ghz) AS ap_avg_users
                 FROM wifi_data
