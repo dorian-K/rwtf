@@ -3,7 +3,7 @@ import pool, { getConnection } from "./db.js";
 import getAuslastungNumber from "./gym_crawler.js";
 import { PoolConnection } from "mariadb";
 import { SAMPLE } from "./sample_data.js";
-import { downloadStreamFile, isAachener } from "./study.js";
+import { downloadStreamFile, isAachener, searchStudyFiles, inspectStudyFile } from "./study.js";
 import { rateLimit } from "express-rate-limit";
 import {
     buildFullWeek,
@@ -392,6 +392,18 @@ const limiterdoc2 = rateLimit({
     legacyHeaders: false,
 });
 app.get("/api/v1/study", limiterdoc1, limiterdoc2, downloadStreamFile);
+
+// Read-only search/inspect over already-downloaded study files. Lighter limit than the doc
+// download endpoints since these only hit the local DB (no StudyDrive fetch).
+const limiterStudyRead = rateLimit({
+    windowMs: 60_000, // 60 reads / minute
+    limit: 60,
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+app.get("/api/v1/study/search", limiterStudyRead, searchStudyFiles);
+app.get("/api/v1/study/inspect", limiterStudyRead, inspectStudyFile);
+
 app.get("/api/v1/is_aachen", async (req, res) => {
     if (await isAachener(req, res)) {
         res.json({ status: true, ip: req.ip });
@@ -1143,6 +1155,11 @@ const database_init = async () => {
                 semester_label VARCHAR(255) NOT NULL,
                 json_data TEXT NOT NULL
             )`
+        );
+        // Keeps the default "newest" sort of the study search cheap. The free-text LIKE '%q%'
+        // scan can't use a B-tree index (leading wildcard), but the table is small.
+        await conn.query(
+            "CREATE INDEX IF NOT EXISTS idx_studyfiles_created ON studyfiles (created_at)"
         );
         console.log("Database initialized");
 

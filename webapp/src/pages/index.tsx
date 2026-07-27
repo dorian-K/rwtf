@@ -1,4 +1,10 @@
-import { GymInterpLineResponse, GymResponse, PredictionMethod } from "@/api/Backend";
+import {
+    GymInterpLineResponse,
+    GymResponse,
+    PredictionMethod,
+    StudyFileResult,
+    StudyInspectResponse,
+} from "@/api/Backend";
 import { useBackendContext } from "@/components/BackendProvider";
 import { ApexOptions } from "apexcharts";
 import React from "react";
@@ -677,11 +683,265 @@ function StudyStuff() {
     );
 }
 
+// StudyDrive exposes file_type as an integer code; label the ones we know, fall back to the code.
+function fileTypeLabel(code: number): string {
+    const labels: { [key: number]: string } = {
+        1: "Document",
+        2: "Summary",
+        3: "Exam",
+        4: "Notes",
+        5: "Assignment",
+    };
+    return labels[code] ?? `Type ${code}`;
+}
+
+// A few metadata keys worth surfacing in the inspect view, if present in the stored blob.
+const INSPECT_META_FIELDS: { key: string; label: string }[] = [
+    { key: "title", label: "Title" },
+    { key: "description", label: "Description" },
+    { key: "page_count", label: "Pages" },
+    { key: "language", label: "Language" },
+    { key: "download_count", label: "Downloads" },
+    { key: "views", label: "Views" },
+    { key: "rating", label: "Rating" },
+];
+
+function StudyInspect({
+    data,
+    onDownload,
+    onClose,
+}: {
+    data: StudyInspectResponse;
+    onDownload: (url: string) => void;
+    onClose: () => void;
+}) {
+    const { file, metadata } = data;
+    const rows: { label: string; value: React.ReactNode }[] = [
+        { label: "Filename", value: file.filename },
+        { label: "Course", value: file.course_name || "—" },
+        { label: "Professor", value: file.professor_name || "—" },
+        { label: "University", value: file.university_name || "—" },
+        { label: "Semester", value: file.semester_label || "—" },
+        { label: "Type", value: fileTypeLabel(file.file_type) },
+        { label: "Downloaded", value: new Date(file.created_at).toLocaleString("de-DE") },
+    ];
+    if (metadata) {
+        for (const f of INSPECT_META_FIELDS) {
+            const v = metadata[f.key];
+            if (v !== undefined && v !== null && v !== "") {
+                rows.push({ label: f.label, value: String(v) });
+            }
+        }
+    }
+
+    return (
+        <div className="card mt-3">
+            <div className="card-header d-flex justify-content-between align-items-center">
+                <span>Inspect · {file.filename}</span>
+                <button className="btn-close" aria-label="Close" onClick={onClose}></button>
+            </div>
+            <div className="card-body">
+                {!metadata && (
+                    <div className="alert alert-secondary py-2">
+                        No extended metadata stored for this file.
+                    </div>
+                )}
+                <dl className="row mb-3">
+                    {rows.map((r, i) => (
+                        <React.Fragment key={i}>
+                            <dt className="col-sm-3 text-muted">{r.label}</dt>
+                            <dd className="col-sm-9">{r.value}</dd>
+                        </React.Fragment>
+                    ))}
+                </dl>
+                <button
+                    className="btn btn-primary btn-sm"
+                    onClick={() => onDownload(file.downloadUrl)}
+                >
+                    Download
+                </button>
+            </div>
+        </div>
+    );
+}
+
+function StudySearch() {
+    const api = useBackendContext();
+    const [aachener, setIsAachener] = useState<boolean>();
+    const [q, setQ] = useState("");
+    const [sort, setSort] = useState("newest");
+    const [page, setPage] = useState(1);
+    const [results, setResults] = useState<StudyFileResult[]>([]);
+    const [hasMore, setHasMore] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [inspect, setInspect] = useState<StudyInspectResponse | null>(null);
+
+    useEffect(() => {
+        api.isAachener().then(setIsAachener);
+    }, [api]);
+
+    const runSearch = (targetPage: number) => {
+        setLoading(true);
+        api.searchStudyFiles({ q, sort, page: targetPage, pageSize: 20 })
+            .then((d) => {
+                setResults(d.results);
+                setHasMore(d.has_more);
+                setPage(d.page);
+                setError(null);
+            })
+            .catch((e) => setError(String(e)))
+            .finally(() => setLoading(false));
+    };
+
+    // Debounced search whenever the query or sort changes; always resets to page 1.
+    useEffect(() => {
+        if (!aachener) return;
+        const tim = setTimeout(() => runSearch(1), 300);
+        return () => clearTimeout(tim);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [api, aachener, q, sort]);
+
+    const onDownload = (url: string) => {
+        window.open(api.getStudyUrl(url), "_blank");
+    };
+
+    if (aachener === undefined || aachener === false) {
+        // Access gate is already shown by the StudyStuff card above; render nothing here.
+        return null;
+    }
+
+    return (
+        <>
+            <div className="card mt-3">
+                <div className="card-header">Browse downloaded files</div>
+                <div className="card-body">
+                    {error && <div className="alert alert-danger">{error}</div>}
+                    <div className="d-flex flex-wrap gap-2 mb-3 align-items-center">
+                        <div className="input-group" style={{ maxWidth: "420px" }}>
+                            <span className="input-group-text">Search</span>
+                            <input
+                                type="text"
+                                className="form-control"
+                                placeholder="filename, course, professor, university…"
+                                value={q}
+                                onChange={(e) => setQ(e.target.value)}
+                            />
+                        </div>
+                        <div className="input-group" style={{ maxWidth: "220px" }}>
+                            <label className="input-group-text" htmlFor="studySort">
+                                Sort
+                            </label>
+                            <select
+                                className="form-select"
+                                id="studySort"
+                                value={sort}
+                                onChange={(e) => setSort(e.target.value)}
+                            >
+                                <option value="newest">Newest</option>
+                                <option value="oldest">Oldest</option>
+                                <option value="filename">Filename</option>
+                            </select>
+                        </div>
+                        {loading && <div className="spinner-border spinner-border-sm"></div>}
+                    </div>
+
+                    {!loading && results.length === 0 ? (
+                        <p className="text-muted mb-0">No files match your search.</p>
+                    ) : (
+                        <div className="table-responsive">
+                            <table className="table table-sm table-hover align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>Filename</th>
+                                        <th>Course</th>
+                                        <th>Professor</th>
+                                        <th>University</th>
+                                        <th>Semester</th>
+                                        <th>Type</th>
+                                        <th>Date</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {results.map((r) => (
+                                        <tr key={r.id}>
+                                            <td>{r.filename}</td>
+                                            <td>{r.course_name || "—"}</td>
+                                            <td>{r.professor_name || "—"}</td>
+                                            <td>{r.university_name || "—"}</td>
+                                            <td>{r.semester_label || "—"}</td>
+                                            <td>{fileTypeLabel(r.file_type)}</td>
+                                            <td className="text-nowrap">
+                                                {new Date(r.created_at).toLocaleDateString("de-DE")}
+                                            </td>
+                                            <td className="text-nowrap">
+                                                <div className="btn-group btn-group-sm">
+                                                    <button
+                                                        className="btn btn-outline-primary"
+                                                        onClick={() => onDownload(r.downloadUrl)}
+                                                    >
+                                                        Download
+                                                    </button>
+                                                    <button
+                                                        className="btn btn-outline-secondary"
+                                                        onClick={() =>
+                                                            api
+                                                                .inspectStudyFile(r.study_id)
+                                                                .then(setInspect)
+                                                                .catch((e) => setError(String(e)))
+                                                        }
+                                                    >
+                                                        Inspect
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+
+                    <div className="d-flex align-items-center gap-2">
+                        <div className="btn-group btn-group-sm" role="group">
+                            <button
+                                className="btn btn-outline-secondary"
+                                disabled={page === 1 || loading}
+                                onClick={() => runSearch(page - 1)}
+                            >
+                                ← Prev
+                            </button>
+                            <button
+                                className="btn btn-outline-secondary"
+                                disabled={!hasMore || loading}
+                                onClick={() => runSearch(page + 1)}
+                            >
+                                Next →
+                            </button>
+                        </div>
+                        <span className="text-muted small">Page {page}</span>
+                    </div>
+                </div>
+            </div>
+
+            {inspect && (
+                <StudyInspect
+                    data={inspect}
+                    onDownload={onDownload}
+                    onClose={() => setInspect(null)}
+                />
+            )}
+        </>
+    );
+}
+
 export default function Home() {
     return (
         <div className="container">
             <GymStuff />
             <StudyStuff />
+            <StudySearch />
         </div>
     );
 }

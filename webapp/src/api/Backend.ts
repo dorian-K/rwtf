@@ -95,6 +95,33 @@ export interface WifiBuildingPredictResponse {
     dayoffset: number;
 }
 
+export interface StudyFileResult {
+    id: number;
+    study_id: string;
+    filename: string;
+    course_name: string;
+    file_type: number;
+    university_name: string;
+    professor_name: string;
+    semester_label: string;
+    created_at: string;
+    downloadUrl: string;
+}
+
+export interface StudySearchResponse {
+    error: boolean;
+    results: StudyFileResult[];
+    page: number;
+    page_size: number;
+    has_more: boolean;
+}
+
+export interface StudyInspectResponse {
+    error: boolean;
+    file: StudyFileResult & { path: string };
+    metadata: Record<string, any> | null;
+}
+
 export class Backend {
     fetch(input: string, init?: RequestInit): Promise<Response> {
         return fetch(input, init);
@@ -138,6 +165,26 @@ export class Backend {
 
     getStudyUrl(url: string): string {
         return `/api/v1/study?url=${url}`;
+    }
+
+    searchStudyFiles(params: {
+        q?: string;
+        page?: number;
+        pageSize?: number;
+        sort?: string;
+    }): Promise<StudySearchResponse> {
+        const sp = new URLSearchParams();
+        if (params.q) sp.set("q", params.q);
+        sp.set("page", String(params.page ?? 1));
+        sp.set("page_size", String(params.pageSize ?? 20));
+        if (params.sort) sp.set("sort", params.sort);
+        return this.processResponse(this.fetch("/api/v1/study/search?" + sp.toString()));
+    }
+
+    inspectStudyFile(studyId: string): Promise<StudyInspectResponse> {
+        return this.processResponse(
+            this.fetch("/api/v1/study/inspect?study_id=" + encodeURIComponent(studyId)),
+        );
     }
 
     getGymHistory(

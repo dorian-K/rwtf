@@ -227,6 +227,130 @@ export async function isAachener(req: Request, res: Response) {
     return true;
 }
 
+// Search the studyfiles metadata table with a free-text query over the human-readable columns.
+// json_data is deliberately excluded from the result set (it's the full API blob per row) — the
+// inspect route serves that. Pagination uses the LIMIT pageSize+1 overflow trick to compute
+// has_more without a second COUNT query.
+export async function searchStudyFiles(req: Request, res: Response) {
+    if (!(await isAachener(req, res))) {
+        res.status(403).send({ error: true, msg: "Invalid IP" });
+        return;
+    }
+
+    const q = (req.query.q as string) ?? "";
+    const page = Math.max(1, parseInt((req.query.page as string) ?? "1", 10) || 1);
+    const pageSizeRaw = parseInt((req.query.page_size as string) ?? "20", 10) || 20;
+    const pageSize = Math.min(50, Math.max(1, pageSizeRaw));
+
+    // Whitelist sort → fixed ORDER BY string; never interpolate user input.
+    const sortMap: { [key: string]: string } = {
+        newest: "created_at DESC",
+        oldest: "created_at ASC",
+        filename: "filename ASC",
+    };
+    const orderBy = "ORDER BY " + (sortMap[(req.query.sort as string) ?? "newest"] ?? sortMap.newest);
+
+    const clauses: string[] = [];
+    const params: any[] = [];
+    if (q) {
+        const like = `%${q}%`;
+        clauses.push(
+            "(filename LIKE ? OR course_name LIKE ? OR professor_name LIKE ? " +
+                "OR university_name LIKE ? OR semester_label LIKE ?)"
+        );
+        params.push(like, like, like, like, like);
+    }
+    const where = clauses.length ? "WHERE " + clauses.join(" AND ") : "";
+
+    let conn: PoolConnection | undefined;
+    try {
+        conn = await getConnection();
+        const rows = await conn.query(
+            `SELECT id, study_id, filename, course_name, file_type,
+                    university_name, professor_name, semester_label, created_at
+             FROM studyfiles
+             ${where}
+             ${orderBy}
+             LIMIT ? OFFSET ?`,
+            [...params, pageSize + 1, (page - 1) * pageSize]
+        );
+        const hasMore = rows.length > pageSize;
+        const pageRows = hasMore ? rows.slice(0, pageSize) : rows;
+        const results = pageRows.map((r: any) => ({
+            ...r,
+            downloadUrl: `${BASE_URL}/document/${r.study_id}`,
+        }));
+        res.json({
+            error: false,
+            results,
+            page,
+            page_size: pageSize,
+            has_more: hasMore,
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).send({ error: true, msg: "Search failed" });
+    } finally {
+        if (conn) conn.end();
+    }
+}
+
+// Return the full stored metadata for a single studyfile, including the parsed json_data blob so
+// the frontend can render a curated set of fields. Looks up by the UNIQUE study_id (index hit).
+export async function inspectStudyFile(req: Request, res: Response) {
+    if (!(await isAachener(req, res))) {
+        res.status(403).send({ error: true, msg: "Invalid IP" });
+        return;
+    }
+
+    const studyId = req.query.study_id as string;
+    if (!studyId) {
+        res.status(400).send({ error: true, msg: "Missing study_id" });
+        return;
+    }
+
+    let conn: PoolConnection | undefined;
+    try {
+        conn = await getConnection();
+        const rows = await conn.query("SELECT * FROM studyfiles WHERE study_id = ? LIMIT 1", [
+            studyId,
+        ]);
+        if (rows.length === 0) {
+            res.status(404).send({ error: true, msg: "Not found" });
+            return;
+        }
+        const row = rows[0];
+        let metadata: any = null;
+        try {
+            metadata = JSON.parse(row.json_data);
+        } catch {
+            metadata = null;
+        }
+        res.json({
+            error: false,
+            file: {
+                id: row.id,
+                study_id: row.study_id,
+                path: row.path,
+                created_at: row.created_at,
+                filename: row.filename,
+                course_name: row.course_name,
+                file_type: row.file_type,
+                university_name: row.university_name,
+                professor_name: row.professor_name,
+                semester_label: row.semester_label,
+                downloadUrl: `${BASE_URL}/document/${row.study_id}`,
+            },
+            metadata,
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).send({ error: true, msg: "Inspect failed" });
+    } finally {
+        if (conn) conn.end();
+    }
+}
+
 export async function downloadStreamFile(req: Request, res: Response) {
     if (!isAachener(req, res)) {
         res.status(403).send({ error: true, msg: "Invalid IP" });
