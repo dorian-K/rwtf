@@ -97,7 +97,7 @@ app.get("/api/v1/gym", async (req, res) => {
 
                 const rows = await conn.query(
                     "SELECT auslastung, created_at FROM rwth_gym WHERE created_at >= ? AND created_at <= ? LIMIT 500",
-                    [startDate, endDate]
+                    [startDate, endDate],
                 );
 
                 const sanitized = rows.map((row: any) => {
@@ -175,10 +175,10 @@ app.get("/api/v1/gym_interpline", async (req, res) => {
 
             const rows = await conn.query(
                 "SELECT auslastung, created_at FROM rwth_gym WHERE created_at >= ? AND created_at <= ? LIMIT 3500",
-                [startDate, endDate]
+                [startDate, endDate],
             );
 
-            if(i > 60 && rows.length < 20) {
+            if (i > 60 && rows.length < 20) {
                 break; // very little data
             }
 
@@ -201,7 +201,7 @@ app.get("/api/v1/gym_interpline", async (req, res) => {
 
         // calculate all time high
         let allTimeHigh = await conn.query(
-            "SELECT MAX(auslastung) as max_auslastung FROM rwth_gym"
+            "SELECT MAX(auslastung) as max_auslastung FROM rwth_gym",
         );
         if (allTimeHigh.length > 0) {
             allTimeHigh = allTimeHigh[0].max_auslastung;
@@ -276,7 +276,7 @@ app.post("/api/v1/wifiap", limiterPost, express.json({ limit: "500kb" }), async 
                 await conn.query(
                     `INSERT INTO wifi_data_apnames (apname, location, building, organisation) VALUES (?, ?, ?, ?)
                     ON DUPLICATE KEY UPDATE apname=apname`,
-                    [row["Name"], row["Cover / Ort"], row["Gebäude"], row["Organisation"]]
+                    [row["Name"], row["Cover / Ort"], row["Gebäude"], row["Organisation"]],
                 );
 
                 // check if the numbers are parseable ints
@@ -297,9 +297,9 @@ app.post("/api/v1/wifiap", limiterPost, express.json({ limit: "500kb" }), async 
                             parse(
                                 row["Zuletzt als online geprüft"],
                                 "dd.MM.yyyy HH:mm",
-                                new Date()
+                                new Date(),
                             ),
-                        ]
+                        ],
                     );
                     numAdded++;
                 }
@@ -362,7 +362,7 @@ app.post("/api/v1/upload", limiterPost, express.json({ limit: "1000kb" }), async
                 await conn.query(
                     `INSERT INTO wifi_data_aplocations (uploader_id, apname, latitude, longitude, raw, hash) VALUES (?, ?, ?, ?, ?, ?)
                     ON DUPLICATE KEY UPDATE hash=hash`,
-                    [deviceId, row.name, row.latitude, row.longitude, JSON.stringify(row), hash]
+                    [deviceId, row.name, row.latitude, row.longitude, JSON.stringify(row), hash],
                 );
             }
             await conn.commit();
@@ -426,7 +426,7 @@ app.get("/api/v1/gym/export", limiterExport, async (req, res) => {
     const startDateStr = req.query.start_date as string;
     const endDateStr = req.query.end_date as string;
     const formatParam = (req.query.format as string) || "csv";
-    const format = (formatParam === "json" || formatParam === "csv") ? formatParam : "csv";
+    const format = formatParam === "json" || formatParam === "csv" ? formatParam : "csv";
 
     if (!startDateStr || !endDateStr) {
         res.status(400).json({ error: true, msg: "start_date and end_date are required" });
@@ -476,7 +476,7 @@ app.get("/api/v1/gym/export", limiterExport, async (req, res) => {
             WHERE created_at >= ? AND created_at <= ?
             ORDER BY created_at
             LIMIT ?`,
-            [startDate, endOfEndDate, MAX_ROWS + 1]
+            [startDate, endOfEndDate, MAX_ROWS + 1],
         );
 
         const hasMore = rows.length > MAX_ROWS;
@@ -499,8 +499,11 @@ app.get("/api/v1/gym/export", limiterExport, async (req, res) => {
         };
 
         // Build Content-Disposition: sanitize all values for header safety
-        const safeStr = (s: string) => s.replace(/[^a-zA-Z0-9._-]/g, '_');
-        res.setHeader("Content-Disposition", `attachment; filename="gym_data_${safeStr(startDateStr)}_${safeStr(endDateStr)}.${safeStr(format)}"`);
+        const safeStr = (s: string) => s.replace(/[^a-zA-Z0-9._-]/g, "_");
+        res.setHeader(
+            "Content-Disposition",
+            `attachment; filename="gym_data_${safeStr(startDateStr)}_${safeStr(endDateStr)}.${safeStr(format)}"`,
+        );
         res.setHeader("Cache-Control", "no-store");
         res.setHeader("Pragma", "no-cache");
 
@@ -531,7 +534,9 @@ app.get("/api/v1/gym/export", limiterExport, async (req, res) => {
             res.send(lines.join("\n") + "\n");
         }
 
-        console.log(`Export: ${req.ip} downloaded ${exportRows.length} rows (format=${format}, range=${startDateStr} to ${endDateStr})`);
+        console.log(
+            `Export: ${req.ip} downloaded ${exportRows.length} rows (format=${format}, range=${startDateStr} to ${endDateStr})`,
+        );
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: true });
@@ -598,7 +603,7 @@ app.get("/api/v1/gym/history", async (req, res) => {
             WHERE created_at >= ? AND created_at <= ?
             GROUP BY time_bucket
             ORDER BY time_bucket`,
-            [dateFormat, startDate, endDate]
+            [dateFormat, startDate, endDate],
         );
 
         let queryMs = new Date().getTime() - startTime.getTime();
@@ -638,7 +643,7 @@ app.get("/api/v1/gym/monthly", async (req, res) => {
             FROM rwth_gym 
             WHERE created_at >= DATE_SUB(NOW(), INTERVAL 24 MONTH)
             GROUP BY month
-            ORDER BY month`
+            ORDER BY month`,
         );
 
         // Also get peak hour for each month
@@ -650,7 +655,7 @@ app.get("/api/v1/gym/monthly", async (req, res) => {
             FROM rwth_gym 
             WHERE created_at >= DATE_SUB(NOW(), INTERVAL 24 MONTH)
             GROUP BY month, hour
-            ORDER BY month, avg_utilization DESC`
+            ORDER BY month, avg_utilization DESC`,
         );
 
         // For each month, find the hour with highest average utilization
@@ -706,7 +711,7 @@ app.get("/api/v1/gym/hourly-pattern", async (req, res) => {
             FROM rwth_gym 
             WHERE created_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
             GROUP BY hour
-            ORDER BY hour`
+            ORDER BY hour`,
         );
 
         // Also get day-of-week patterns
@@ -718,7 +723,7 @@ app.get("/api/v1/gym/hourly-pattern", async (req, res) => {
             FROM rwth_gym 
             WHERE created_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
             GROUP BY day_of_week
-            ORDER BY day_of_week`
+            ORDER BY day_of_week`,
         );
 
         // And hour x day-of-week heatmap data
@@ -731,7 +736,7 @@ app.get("/api/v1/gym/hourly-pattern", async (req, res) => {
             FROM rwth_gym 
             WHERE created_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
             GROUP BY day_of_week, hour
-            ORDER BY day_of_week, hour`
+            ORDER BY day_of_week, hour`,
         );
 
         let queryMs = new Date().getTime() - startTime.getTime();
@@ -761,7 +766,7 @@ async function resolveBuildingApnames(conn: PoolConnection, building: string): P
          INNER JOIN (SELECT apname, MAX(id) AS max_id FROM wifi_data_apnames GROUP BY apname) latest
              ON wan.apname = latest.apname AND wan.id = latest.max_id
          WHERE wan.building = ?`,
-        [building]
+        [building],
     );
     return apRows.map((r: any) => r.apname);
 }
@@ -774,7 +779,7 @@ async function fetchBuildingSeries(
     conn: PoolConnection,
     apnames: string[],
     startDate: Date,
-    endDate: Date
+    endDate: Date,
 ): Promise<{ value: number; created_at: Date }[]> {
     if (apnames.length === 0) return [];
     const inPlaceholders = apnames.map(() => "?").join(",");
@@ -800,7 +805,7 @@ async function fetchBuildingSeries(
          ) per_ap
          GROUP BY per_ap.bucket10
          ORDER BY per_ap.bucket10`,
-        [...apnames, startDate, endDate]
+        [...apnames, startDate, endDate],
     );
     // DECIMAL aggregates can arrive as strings — coerce to Number for the math
     // engine. created_at comes back as epoch-ms; the engine treats it as a Date-ish.
@@ -822,7 +827,7 @@ app.get("/api/v1/wifi/buildings", async (req, res) => {
         const rows = await conn.query(
             `SELECT DISTINCT building FROM wifi_data_apnames
              WHERE building IS NOT NULL AND building != ''
-             ORDER BY building`
+             ORDER BY building`,
         );
         res.setHeader("Cache-Control", "public, max-age=300");
         res.json({ buildings: rows.map((r: any) => r.building) });
@@ -904,7 +909,7 @@ app.get("/api/v1/wifi/building", async (req, res) => {
             ) AS per_ap
             GROUP BY time_bucket
             ORDER BY time_bucket`,
-            [...apnames, hours]
+            [...apnames, hours],
         );
 
         // Step 3 — current state: take each AP's most recent row within the snapshot window, then
@@ -925,7 +930,7 @@ app.get("/api/v1/wifi/building", async (req, res) => {
                   AND insert_time >= DATE_SUB(NOW(), INTERVAL ? HOUR)
                 GROUP BY apname
             ) latest ON wd.apname = latest.apname AND wd.insert_time = latest.max_insert`,
-            [...apnames, CURRENT_WINDOW_HOURS]
+            [...apnames, CURRENT_WINDOW_HOURS],
         );
 
         const cur = currentRows[0] ?? {};
@@ -1083,16 +1088,18 @@ const database_init = async () => {
                 last_online TIMESTAMP NOT NULL,
 
                 UNIQUE KEY unique_apname_last_online (apname, last_online)
-            )`
+            )`,
         );
         await conn.query("CREATE INDEX IF NOT EXISTS idx_insert_time ON wifi_data (last_online)");
         await conn.query("CREATE INDEX IF NOT EXISTS idx_apname ON wifi_data (apname)");
-        await conn.query("CREATE INDEX IF NOT EXISTS idx_wifi_insert_time ON wifi_data (insert_time)");
+        await conn.query(
+            "CREATE INDEX IF NOT EXISTS idx_wifi_insert_time ON wifi_data (insert_time)",
+        );
         // Composite index for the per-building queries: filters by a set of apnames AND a recent
         // insert_time range. Lets MariaDB seek straight to each AP's recent rows instead of scanning
         // that AP's entire history (the table has ~18M rows). Used by the "current" snapshot query.
         await conn.query(
-            "CREATE INDEX IF NOT EXISTS idx_wifi_apname_insert ON wifi_data (apname, insert_time)"
+            "CREATE INDEX IF NOT EXISTS idx_wifi_apname_insert ON wifi_data (apname, insert_time)",
         );
         // Covering index for the history & prediction aggregations, which filter by (apname, online,
         // insert_time) and then read the user-count columns. Including those columns makes the scan
@@ -1100,7 +1107,7 @@ const database_init = async () => {
         // prediction's multi-week range scan.
         await conn.query(
             `CREATE INDEX IF NOT EXISTS idx_wifi_cover
-             ON wifi_data (apname, online, insert_time, users_2_4_ghz, users_5_ghz)`
+             ON wifi_data (apname, online, insert_time, users_2_4_ghz, users_5_ghz)`,
         );
 
         await conn.query(
@@ -1113,7 +1120,7 @@ const database_init = async () => {
                 organisation VARCHAR(255) NOT NULL,
 
                 UNIQUE KEY unique_apname_combo (apname, location, building, organisation)
-            )`
+            )`,
         );
         await conn.query("CREATE INDEX IF NOT EXISTS idx_apname ON wifi_data_apnames (apname)");
 
@@ -1126,14 +1133,14 @@ const database_init = async () => {
                 longitude DECIMAL(10, 7) NOT NULL,
                 hash VARCHAR(64) NOT NULL UNIQUE,
                 raw JSON NOT NULL
-            )`
+            )`,
         );
         await conn.query(
-            "CREATE INDEX IF NOT EXISTS idx_loc_apname ON wifi_data_aplocations (apname)"
+            "CREATE INDEX IF NOT EXISTS idx_loc_apname ON wifi_data_aplocations (apname)",
         );
 
         await conn.query(
-            "CREATE TABLE IF NOT EXISTS rwth_gym (id INT AUTO_INCREMENT PRIMARY KEY, auslastung INT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+            "CREATE TABLE IF NOT EXISTS rwth_gym (id INT AUTO_INCREMENT PRIMARY KEY, auslastung INT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
         );
         // index for created_at
         await conn.query("CREATE INDEX IF NOT EXISTS idx_created_at ON rwth_gym (created_at)");
@@ -1154,12 +1161,12 @@ const database_init = async () => {
                 professor_name VARCHAR(255) NOT NULL,
                 semester_label VARCHAR(255) NOT NULL,
                 json_data TEXT NOT NULL
-            )`
+            )`,
         );
         // Keeps the default "newest" sort of the study search cheap. The free-text LIKE '%q%'
         // scan can't use a B-tree index (leading wildcard), but the table is small.
         await conn.query(
-            "CREATE INDEX IF NOT EXISTS idx_studyfiles_created ON studyfiles (created_at)"
+            "CREATE INDEX IF NOT EXISTS idx_studyfiles_created ON studyfiles (created_at)",
         );
         console.log("Database initialized");
 

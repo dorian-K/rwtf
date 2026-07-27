@@ -113,7 +113,7 @@ async function splitImg(img: sharp.Sharp): Promise<ImagePart[]> {
                 return { width: 22, height: 30, data: part };
             }
             throw new Error("Error during image processing");
-        })
+        }),
     );
 }
 
@@ -198,7 +198,7 @@ async function diffVal(im1Buffer: Buffer, im2Buffer: Buffer, num: string): Promi
 
 async function matchNumber(
     toBeMatchedBuffer: Buffer,
-    numberImages: Record<number, sharp.Sharp>
+    numberImages: Record<number, sharp.Sharp>,
 ): Promise<[number, number]> {
     let minDiff = Infinity;
     let matchedNumber = 0;
@@ -220,7 +220,7 @@ async function matchNumber(
 
 export async function getAuslastungAndMatchNumbers(
     pic: sharp.Sharp,
-    debug = undefined as string | undefined
+    debug = undefined as string | undefined,
 ): Promise<[number, number][]> {
     let auslastung = pic;
     // save to disk

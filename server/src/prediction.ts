@@ -54,7 +54,7 @@ function normalizeDataToTimeOfDay(data: TimeSeriesPiece[], base: number) {
                     gDate.getHours(),
                     gDate.getMinutes(),
                     gDate.getSeconds(),
-                    gDate.getMilliseconds()
+                    gDate.getMilliseconds(),
                 ),
             };
         })
@@ -73,13 +73,13 @@ function flattenWeeksToDays(hist: FullWeek[]): WeightedDayData[] {
             .map((day) => ({
                 data: day,
                 weight: week.weight,
-            }))
+            })),
     );
 }
 
 function getDaysForWeekday(hist: FullWeek[], dayOfWeek: number): WeightedDayData[] {
     return flattenWeeksToDays(hist).filter(
-        (day) => day.data.length > 0 && getDayOfWeek(day.data[0].created_at) === dayOfWeek
+        (day) => day.data.length > 0 && getDayOfWeek(day.data[0].created_at) === dayOfWeek,
     );
 }
 
@@ -172,7 +172,7 @@ function averageDays(dayData: WeightedDayData[], window: DayWindow, useMedian = 
 
 function getCurrentDayData(currentWeek: FullWeek, currentDayOfWeek: number): TimeSeriesPiece[] {
     const matchingDay = currentWeek.days.find(
-        (day) => day.length > 0 && getDayOfWeek(day[0].created_at) === currentDayOfWeek
+        (day) => day.length > 0 && getDayOfWeek(day[0].created_at) === currentDayOfWeek,
     );
     return matchingDay ?? [];
 }
@@ -181,7 +181,7 @@ function makeAverageLine(
     hist: FullWeek[],
     currentDayOfWeek: number,
     window: DayWindow = FULL_DAY,
-    useMedian = false
+    useMedian = false,
 ) {
     return averageDays(getDaysForWeekday(hist, currentDayOfWeek), window, useMedian);
 }
@@ -189,7 +189,7 @@ function makeAverageLine(
 function makeDayOfWeekLine(
     hist: FullWeek[],
     currentDayOfWeek: number,
-    window: DayWindow = FULL_DAY
+    window: DayWindow = FULL_DAY,
 ) {
     const filteredData = getDaysForWeekday(hist, currentDayOfWeek);
     if (filteredData.length === 0) {
@@ -203,7 +203,7 @@ function makeClosestLine(
     hist: FullWeek[],
     currentWeek: FullWeek,
     currentDayOfWeek: number,
-    window: DayWindow = FULL_DAY
+    window: DayWindow = FULL_DAY,
 ) {
     const MINIMUM_COMPARE_POINTS = 6;
     const DIFFERENT_WEEKDAY_WEIGHT_FACTOR = 2;
@@ -335,7 +335,7 @@ function buildFullWeek(data: TimeSeriesPiece[], weight: number): FullWeek {
 
     return {
         days: Array.from(dayMap.values()).map((day) =>
-            day.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+            day.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()),
         ),
         weight,
     };
@@ -347,7 +347,7 @@ function predictLine(
     method: PredictionMethod,
     weeks: FullWeek[],
     currentDayOfWeek: number,
-    window: DayWindow = FULL_DAY
+    window: DayWindow = FULL_DAY,
 ): TimeSeriesPiece[] {
     switch (method) {
         case "average":

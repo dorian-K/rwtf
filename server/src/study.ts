@@ -34,18 +34,21 @@ const BASE = Buffer.from("c3R1ZHlkcml2ZQ==", "base64").toString("utf-8");
 
 const cachedFiles: { [url: string]: string } = {};
 // housekeeping
-setInterval(() => {
-    const keys = Object.keys(cachedFiles);
-    for (let key of keys) {
-        if (!fs.existsSync(cachedFiles[key])) {
-            delete cachedFiles[key];
+setInterval(
+    () => {
+        const keys = Object.keys(cachedFiles);
+        for (let key of keys) {
+            if (!fs.existsSync(cachedFiles[key])) {
+                delete cachedFiles[key];
+            }
         }
-    }
-}, 1000 * 60 * 60);
+    },
+    1000 * 60 * 60,
+);
 
 class UserError extends Error {
     constructor(message: string) {
-        super(message)
+        super(message);
     }
 }
 
@@ -137,7 +140,7 @@ async function downloadStudyFunky(origUrl: string) {
                     data["professor_name"] ?? "",
                     data["semester"]["name"] ?? "",
                     JSON.stringify(data),
-                ]
+                ],
             );
         })
         .then(() => {
@@ -181,8 +184,9 @@ export async function isAachener(req: Request, res: Response) {
             try {
                 const resp = await fetch(`https://ipapi.co/${ip}/json/`, {
                     headers: {
-                        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:141.0) Gecko/20100101 Firefox/141.0'
-                    }
+                        "User-Agent":
+                            "Mozilla/5.0 (X11; Linux x86_64; rv:141.0) Gecko/20100101 Firefox/141.0",
+                    },
                 });
                 const js: any = await resp.json();
                 //console.log(js);
@@ -248,7 +252,8 @@ export async function searchStudyFiles(req: Request, res: Response) {
         oldest: "created_at ASC",
         filename: "filename ASC",
     };
-    const orderBy = "ORDER BY " + (sortMap[(req.query.sort as string) ?? "newest"] ?? sortMap.newest);
+    const orderBy =
+        "ORDER BY " + (sortMap[(req.query.sort as string) ?? "newest"] ?? sortMap.newest);
 
     const clauses: string[] = [];
     const params: any[] = [];
@@ -256,7 +261,7 @@ export async function searchStudyFiles(req: Request, res: Response) {
         const like = `%${q}%`;
         clauses.push(
             "(filename LIKE ? OR course_name LIKE ? OR professor_name LIKE ? " +
-                "OR university_name LIKE ? OR semester_label LIKE ?)"
+                "OR university_name LIKE ? OR semester_label LIKE ?)",
         );
         params.push(like, like, like, like, like);
     }
@@ -272,7 +277,7 @@ export async function searchStudyFiles(req: Request, res: Response) {
              ${where}
              ${orderBy}
              LIMIT ? OFFSET ?`,
-            [...params, pageSize + 1, (page - 1) * pageSize]
+            [...params, pageSize + 1, (page - 1) * pageSize],
         );
         const hasMore = rows.length > pageSize;
         const pageRows = hasMore ? rows.slice(0, pageSize) : rows;
@@ -377,33 +382,36 @@ export async function downloadStreamFile(req: Request, res: Response) {
 }
 
 // housekeeping of files directory
-setInterval(() => {
-    console.log("Housekeeping");
-    let files = fs.readdirSync(OS_TEMP);
-    // total size should not exceed 50gb
-    let filesStat = files.map((f) => fsPromises.stat(path.join(OS_TEMP, f)));
-    Promise.all(filesStat)
-        .then((stats) => {
-            let totalSize = stats.reduce((acc, val) => acc + val.size, 0);
-            if (totalSize > 50 * 1024 * 1024 * 1024 || files.length > 10000) {
-                // 50gb
-                // delete oldest files until size is below 40gb
-                let sorted = stats
-                    .map((s, i) => ({ atime: s.atimeMs, size: s.size, file: files[i] }))
-                    .sort((a, b) => a.atime - b.atime);
-                let i = 0;
-                while (totalSize > 40 * 1024 * 1024 * 1024 || files.length - i > 10000) {
-                    // 40gb
-                    fs.unlinkSync(path.join(OS_TEMP, sorted[i].file));
-                    // remove from cache
-                    delete cachedFiles[sorted[i].file];
-                    totalSize -= sorted[i].size;
-                    i++;
+setInterval(
+    () => {
+        console.log("Housekeeping");
+        let files = fs.readdirSync(OS_TEMP);
+        // total size should not exceed 50gb
+        let filesStat = files.map((f) => fsPromises.stat(path.join(OS_TEMP, f)));
+        Promise.all(filesStat)
+            .then((stats) => {
+                let totalSize = stats.reduce((acc, val) => acc + val.size, 0);
+                if (totalSize > 50 * 1024 * 1024 * 1024 || files.length > 10000) {
+                    // 50gb
+                    // delete oldest files until size is below 40gb
+                    let sorted = stats
+                        .map((s, i) => ({ atime: s.atimeMs, size: s.size, file: files[i] }))
+                        .sort((a, b) => a.atime - b.atime);
+                    let i = 0;
+                    while (totalSize > 40 * 1024 * 1024 * 1024 || files.length - i > 10000) {
+                        // 40gb
+                        fs.unlinkSync(path.join(OS_TEMP, sorted[i].file));
+                        // remove from cache
+                        delete cachedFiles[sorted[i].file];
+                        totalSize -= sorted[i].size;
+                        i++;
+                    }
                 }
-            }
-            console.log("Housekeeping done");
-        })
-        .catch((err) => {
-            console.error(err);
-        });
-}, 1000 * 60 * 60); // every hour
+                console.log("Housekeeping done");
+            })
+            .catch((err) => {
+                console.error(err);
+            });
+    },
+    1000 * 60 * 60,
+); // every hour
