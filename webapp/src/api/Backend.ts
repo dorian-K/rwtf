@@ -104,7 +104,9 @@ export interface StudyFileResult {
     university_name: string;
     professor_name: string;
     semester_label: string;
-    created_at: string;
+    download_count: number;
+    // StudyDrive's upload date (from the stored blob); may be missing/unparseable.
+    uploaded_at: string | null;
     downloadUrl: string;
 }
 

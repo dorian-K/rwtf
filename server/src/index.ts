@@ -1160,13 +1160,19 @@ const database_init = async () => {
                 university_name VARCHAR(255) NOT NULL,
                 professor_name VARCHAR(255) NOT NULL,
                 semester_label VARCHAR(255) NOT NULL,
-                json_data TEXT NOT NULL
+                json_data TEXT NOT NULL,
+                download_count INT NOT NULL DEFAULT 0
             )`,
         );
-        // Keeps the default "newest" sort of the study search cheap. The free-text LIKE '%q%'
-        // scan can't use a B-tree index (leading wildcard), but the table is small.
+        // download_count tracks how often a file was fetched through our site; added here for
+        // databases created before the column existed.
         await conn.query(
-            "CREATE INDEX IF NOT EXISTS idx_studyfiles_created ON studyfiles (created_at)",
+            "ALTER TABLE studyfiles ADD COLUMN IF NOT EXISTS download_count INT NOT NULL DEFAULT 0",
+        );
+        // Keeps the default "most downloaded" sort of the study search cheap. The free-text
+        // LIKE '%q%' scan can't use a B-tree index (leading wildcard), but the table is small.
+        await conn.query(
+            "CREATE INDEX IF NOT EXISTS idx_studyfiles_downloads ON studyfiles (download_count)",
         );
         console.log("Database initialized");
 

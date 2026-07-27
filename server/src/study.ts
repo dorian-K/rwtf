@@ -52,13 +52,28 @@ class UserError extends Error {
     }
 }
 
-async function downloadStudyFunky(origUrl: string) {
-    // check cache
-    if (cachedFiles[origUrl] && fs.existsSync(cachedFiles[origUrl])) {
-        console.log("Loaded from cache");
-        return cachedFiles[origUrl];
-    }
+// Bump the per-file download counter (how often a file was fetched through our site). Fire and
+// forget with its own connection, like saveAuslastung. No-op if the row doesn't exist yet.
+function incrementDownloadCount(studyId: string) {
+    let conn: PoolConnection;
+    getConnection()
+        .then((c) => {
+            conn = c;
+            return conn.query(
+                "UPDATE studyfiles SET download_count = download_count + 1 WHERE study_id = ?",
+                [studyId],
+            );
+        })
+        .then(() => {
+            conn.end();
+        })
+        .catch((err) => {
+            console.error(err);
+            if (conn) conn.end();
+        });
+}
 
+async function downloadStudyFunky(origUrl: string) {
     // extract id
     if (!origUrl.startsWith(BASE_URL)) {
         throw new UserError("Invalid url, needs to start with " + BASE_URL);
@@ -67,6 +82,14 @@ async function downloadStudyFunky(origUrl: string) {
     if (!docId) {
         throw new UserError("Invalid url, could not extract document ID");
     }
+
+    // check cache
+    if (cachedFiles[origUrl] && fs.existsSync(cachedFiles[origUrl])) {
+        console.log("Loaded from cache");
+        incrementDownloadCount(docId);
+        return cachedFiles[origUrl];
+    }
+
     const url = `${BASE_URL}/document/${docId}`;
     const response = await fetch(url, {
         headers: {
@@ -98,6 +121,7 @@ async function downloadStudyFunky(origUrl: string) {
 
     if (fs.existsSync(savePath)) {
         console.log("File already exists");
+        incrementDownloadCount(docId);
         return savePath;
     }
 
@@ -129,7 +153,7 @@ async function downloadStudyFunky(origUrl: string) {
         .then((c) => {
             conn = c;
             return conn.query(
-                "INSERT INTO studyfiles (path, study_id, filename, course_name, file_type, university_name, professor_name, semester_label, json_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO studyfiles (path, study_id, filename, course_name, file_type, university_name, professor_name, semester_label, json_data, download_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 [
                     `${docId}.${ending}`,
                     docId,
@@ -140,6 +164,7 @@ async function downloadStudyFunky(origUrl: string) {
                     data["professor_name"] ?? "",
                     data["semester"]["name"] ?? "",
                     JSON.stringify(data),
+                    1,
                 ],
             );
         })
@@ -247,13 +272,14 @@ export async function searchStudyFiles(req: Request, res: Response) {
     const pageSize = Math.min(50, Math.max(1, pageSizeRaw));
 
     // Whitelist sort → fixed ORDER BY string; never interpolate user input.
+    // "downloads" = how often the file was fetched through our site (default).
+    // "uploaded" = when the document was uploaded to StudyDrive (its json_data.created_at).
     const sortMap: { [key: string]: string } = {
-        newest: "created_at DESC",
-        oldest: "created_at ASC",
-        filename: "filename ASC",
+        downloads: "download_count DESC",
+        uploaded: "JSON_UNQUOTE(JSON_EXTRACT(json_data, '$.created_at')) DESC",
     };
     const orderBy =
-        "ORDER BY " + (sortMap[(req.query.sort as string) ?? "newest"] ?? sortMap.newest);
+        "ORDER BY " + (sortMap[(req.query.sort as string) ?? "downloads"] ?? sortMap.downloads);
 
     const clauses: string[] = [];
     const params: any[] = [];
@@ -270,9 +296,12 @@ export async function searchStudyFiles(req: Request, res: Response) {
     let conn: PoolConnection | undefined;
     try {
         conn = await getConnection();
+        // Our own created_at (when we first fetched the file) is intentionally NOT exposed. We
+        // extract the StudyDrive upload date from json_data instead.
         const rows = await conn.query(
             `SELECT id, study_id, filename, course_name, file_type,
-                    university_name, professor_name, semester_label, created_at
+                    university_name, professor_name, semester_label, download_count,
+                    JSON_UNQUOTE(JSON_EXTRACT(json_data, '$.created_at')) AS uploaded_at
              FROM studyfiles
              ${where}
              ${orderBy}
@@ -337,13 +366,15 @@ export async function inspectStudyFile(req: Request, res: Response) {
                 id: row.id,
                 study_id: row.study_id,
                 path: row.path,
-                created_at: row.created_at,
                 filename: row.filename,
                 course_name: row.course_name,
                 file_type: row.file_type,
                 university_name: row.university_name,
                 professor_name: row.professor_name,
                 semester_label: row.semester_label,
+                download_count: row.download_count,
+                // StudyDrive's own upload date, from the stored blob.
+                uploaded_at: metadata?.created_at ?? null,
                 downloadUrl: `${BASE_URL}/document/${row.study_id}`,
             },
             metadata,

@@ -695,16 +695,27 @@ function fileTypeLabel(code: number): string {
     return labels[code] ?? `Type ${code}`;
 }
 
-// A few metadata keys worth surfacing in the inspect view, if present in the stored blob.
+// A few StudyDrive metadata keys worth surfacing in the inspect view, if present in the blob.
 const INSPECT_META_FIELDS: { key: string; label: string }[] = [
-    { key: "title", label: "Title" },
     { key: "description", label: "Description" },
-    { key: "page_count", label: "Pages" },
+    { key: "number_of_pages", label: "Pages" },
     { key: "language", label: "Language" },
-    { key: "download_count", label: "Downloads" },
-    { key: "views", label: "Views" },
-    { key: "rating", label: "Rating" },
+    { key: "avg_star_score", label: "Rating" },
 ];
+
+// StudyDrive's created_at (upload date) may be a datetime string or a unix timestamp; render best
+// effort, falling back to the raw value.
+function formatStudyDate(v: string | null | undefined): string {
+    if (!v) return "—";
+    let d: Date;
+    if (/^\d+$/.test(v)) {
+        const n = Number(v);
+        d = new Date(n < 1e12 ? n * 1000 : n);
+    } else {
+        d = new Date(v);
+    }
+    return isNaN(d.getTime()) ? String(v) : d.toLocaleDateString("de-DE");
+}
 
 function StudyInspect({
     data,
@@ -717,13 +728,13 @@ function StudyInspect({
 }) {
     const { file, metadata } = data;
     const rows: { label: string; value: React.ReactNode }[] = [
-        { label: "Filename", value: file.filename },
         { label: "Course", value: file.course_name || "—" },
         { label: "Professor", value: file.professor_name || "—" },
         { label: "University", value: file.university_name || "—" },
         { label: "Semester", value: file.semester_label || "—" },
-        { label: "Type", value: fileTypeLabel(file.file_type) },
-        { label: "Downloaded", value: new Date(file.created_at).toLocaleString("de-DE") },
+        { label: "Type", value: metadata?.file_type_label || fileTypeLabel(file.file_type) },
+        { label: "Downloads (this site)", value: file.download_count },
+        { label: "Uploaded to StudyDrive", value: formatStudyDate(file.uploaded_at) },
     ];
     if (metadata) {
         for (const f of INSPECT_META_FIELDS) {
@@ -735,33 +746,54 @@ function StudyInspect({
     }
 
     return (
-        <div className="card mt-3">
-            <div className="card-header d-flex justify-content-between align-items-center">
-                <span>Inspect · {file.filename}</span>
-                <button className="btn-close" aria-label="Close" onClick={onClose}></button>
-            </div>
-            <div className="card-body">
-                {!metadata && (
-                    <div className="alert alert-secondary py-2">
-                        No extended metadata stored for this file.
-                    </div>
-                )}
-                <dl className="row mb-3">
-                    {rows.map((r, i) => (
-                        <React.Fragment key={i}>
-                            <dt className="col-sm-3 text-muted">{r.label}</dt>
-                            <dd className="col-sm-9">{r.value}</dd>
-                        </React.Fragment>
-                    ))}
-                </dl>
-                <button
-                    className="btn btn-primary btn-sm"
-                    onClick={() => onDownload(file.downloadUrl)}
+        <>
+            <div className="modal fade show d-block" tabIndex={-1} role="dialog" onClick={onClose}>
+                <div
+                    className="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered"
+                    role="document"
+                    onClick={(e) => e.stopPropagation()}
                 >
-                    Download
-                </button>
+                    <div className="modal-content">
+                        <div className="modal-header">
+                            <h5 className="modal-title text-break">{file.filename}</h5>
+                            <button
+                                type="button"
+                                className="btn-close"
+                                aria-label="Close"
+                                onClick={onClose}
+                            ></button>
+                        </div>
+                        <div className="modal-body">
+                            {!metadata && (
+                                <div className="alert alert-secondary py-2">
+                                    No extended metadata stored for this file.
+                                </div>
+                            )}
+                            <dl className="row mb-0">
+                                {rows.map((r, i) => (
+                                    <React.Fragment key={i}>
+                                        <dt className="col-sm-4 text-muted">{r.label}</dt>
+                                        <dd className="col-sm-8 text-break">{r.value}</dd>
+                                    </React.Fragment>
+                                ))}
+                            </dl>
+                        </div>
+                        <div className="modal-footer">
+                            <button
+                                className="btn btn-primary"
+                                onClick={() => onDownload(file.downloadUrl)}
+                            >
+                                Download
+                            </button>
+                            <button className="btn btn-secondary" onClick={onClose}>
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
-        </div>
+            <div className="modal-backdrop fade show"></div>
+        </>
     );
 }
 
@@ -769,7 +801,7 @@ function StudySearch() {
     const api = useBackendContext();
     const [aachener, setIsAachener] = useState<boolean>();
     const [q, setQ] = useState("");
-    const [sort, setSort] = useState("newest");
+    const [sort, setSort] = useState("downloads");
     const [page, setPage] = useState(1);
     const [results, setResults] = useState<StudyFileResult[]>([]);
     const [hasMore, setHasMore] = useState(false);
@@ -838,9 +870,8 @@ function StudySearch() {
                                 value={sort}
                                 onChange={(e) => setSort(e.target.value)}
                             >
-                                <option value="newest">Newest</option>
-                                <option value="oldest">Oldest</option>
-                                <option value="filename">Filename</option>
+                                <option value="downloads">Most downloaded</option>
+                                <option value="uploaded">Recently uploaded</option>
                             </select>
                         </div>
                         {loading && <div className="spinner-border spinner-border-sm"></div>}
@@ -859,7 +890,8 @@ function StudySearch() {
                                         <th>University</th>
                                         <th>Semester</th>
                                         <th>Type</th>
-                                        <th>Date</th>
+                                        <th className="text-end">Downloads</th>
+                                        <th>Uploaded</th>
                                         <th></th>
                                     </tr>
                                 </thead>
@@ -872,8 +904,9 @@ function StudySearch() {
                                             <td>{r.university_name || "—"}</td>
                                             <td>{r.semester_label || "—"}</td>
                                             <td>{fileTypeLabel(r.file_type)}</td>
+                                            <td className="text-end">{r.download_count}</td>
                                             <td className="text-nowrap">
-                                                {new Date(r.created_at).toLocaleDateString("de-DE")}
+                                                {formatStudyDate(r.uploaded_at)}
                                             </td>
                                             <td className="text-nowrap">
                                                 <div className="btn-group btn-group-sm">
