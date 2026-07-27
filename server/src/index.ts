@@ -755,7 +755,7 @@ async function resolveBuildingApnames(conn: PoolConnection, building: string): P
 }
 
 // Aggregate a building into a single device-count time series over [startDate, endDate]: average
-// each AP within 5-minute buckets (smooths multiple uploads), then sum across online APs so each
+// each AP within 10-minute buckets (smooths multiple uploads), then sum across online APs so each
 // bucket is "total connected devices in the building". Absent APs contribute nothing (correct for
 // gaps); offline rows are excluded. Returns points shaped for the prediction engine.
 async function fetchBuildingSeries(
@@ -766,25 +766,36 @@ async function fetchBuildingSeries(
 ): Promise<{ value: number; created_at: Date }[]> {
     if (apnames.length === 0) return [];
     const inPlaceholders = apnames.map(() => "?").join(",");
+    // Group on an integer bucket key rather than a formatted datetime string —
+    // integer GROUP BY is far cheaper over hundreds of thousands of rows.
+    // Bucket width is 10 min (600 s) to match the real ~10-min sample cadence:
+    // a finer bucket would split each AP's single reading across windows, so a
+    // given bucket would sum over only the subset of APs that reported in it,
+    // producing a steppy aggregate. 10 min lands every AP in the same bucket.
+    // Reconstruct the timestamp from the epoch-second key (bucket10 * 600 s).
     const rows = await conn.query(
-        `SELECT bucket AS created_at, SUM(ap_avg) AS value
+        `SELECT per_ap.bucket10 * 600000 AS created_at, SUM(ap_avg) AS value
          FROM (
             SELECT
-                FROM_UNIXTIME(FLOOR(UNIX_TIMESTAMP(insert_time) / 300) * 300) AS bucket,
+                FLOOR(UNIX_TIMESTAMP(insert_time) / 600) AS bucket10,
                 apname,
                 AVG(users_2_4_ghz + users_5_ghz) AS ap_avg
             FROM wifi_data
             WHERE apname IN (${inPlaceholders})
               AND online = 1
               AND insert_time >= ? AND insert_time <= ?
-            GROUP BY bucket, apname
+            GROUP BY bucket10, apname
          ) per_ap
-         GROUP BY bucket
-         ORDER BY bucket`,
+         GROUP BY per_ap.bucket10
+         ORDER BY per_ap.bucket10`,
         [...apnames, startDate, endDate]
     );
-    // DECIMAL aggregates can arrive as strings — coerce to Number for the math engine.
-    return rows.map((r: any) => ({ value: Number(r.value), created_at: r.created_at }));
+    // DECIMAL aggregates can arrive as strings — coerce to Number for the math
+    // engine. created_at comes back as epoch-ms; the engine treats it as a Date-ish.
+    return rows.map((r: any) => ({
+        value: Number(r.value),
+        created_at: new Date(Number(r.created_at)),
+    }));
 }
 
 // GET /api/v1/wifi/buildings — list all distinct buildings that have AP metadata
