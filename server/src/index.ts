@@ -9,7 +9,6 @@ import {
     buildFullWeek,
     FullWeek,
     predictLine,
-    PredictionMethod,
     DayWindow,
     FULL_DAY,
     getCurrentDayData,
@@ -153,13 +152,6 @@ app.get("/api/v1/gym_interpline", async (req, res) => {
         targetDate.setDate(targetDate.getDate() + dayoffset);
         const currentDayOfWeek = targetDate.getDay();
 
-        // Calculate prediction line based on selected method
-        const methodParam = (req.query.method as string) || "closest";
-        const validMethods = ["closest", "average", "median", "dayofweek"];
-        const method = (
-            validMethods.includes(methodParam) ? methodParam : "closest"
-        ) as PredictionMethod;
-
         let weeks: FullWeek[] = [];
         for (let i = 0; i <= NUM_WEEKS; i++) {
             const weekDate = new Date(targetDate);
@@ -192,10 +184,12 @@ app.get("/api/v1/gym_interpline", async (req, res) => {
             weeks.push(buildFullWeek(sanitized, i <= 4 ? 3 : 1));
         }
 
-        const predicted = predictLine(method, weeks, currentDayOfWeek, GYM_WINDOW);
-        // Map back to the gym's wire format (`auslastung`) so the frontend is unchanged.
+        const predicted = predictLine(weeks, currentDayOfWeek, GYM_WINDOW);
+        // Map back to the gym's wire format (`auslastung`), carrying the confidence band.
         const interpLine = predicted.map((p) => ({
             auslastung: p.value,
+            lower: p.lower,
+            upper: p.upper,
             created_at: p.created_at,
         }));
 
@@ -219,7 +213,6 @@ app.get("/api/v1/gym_interpline", async (req, res) => {
             interpLine: interpLine,
             queryMs: queryMs,
             allTimeHigh: allTimeHigh,
-            method: method,
         });
     } catch (err) {
         console.error(err);
@@ -977,12 +970,6 @@ app.get("/api/v1/wifi/building_predict", async (req, res) => {
     let dayoffset = req.query.dayoffset ? parseInt(req.query.dayoffset as string) : 0;
     if (isNaN(dayoffset) || dayoffset < 0 || dayoffset > 6) dayoffset = 0;
 
-    const methodParam = (req.query.method as string) || "closest";
-    const validMethods = ["closest", "average", "median", "dayofweek"];
-    const method = (
-        validMethods.includes(methodParam) ? methodParam : "closest"
-    ) as PredictionMethod;
-
     // WiFi history is shallow compared to the gym (only a few months). Cap the lookback window; weeks
     // with no data simply produce no rows in the single range query below, so empties are free.
     const NUM_WEEKS = 26;
@@ -995,7 +982,7 @@ app.get("/api/v1/wifi/building_predict", async (req, res) => {
         const apnames = await resolveBuildingApnames(conn, building);
         if (apnames.length === 0) {
             res.setHeader("Cache-Control", "public, max-age=300");
-            res.json({ building, dataToday: [], interpLine: [], method, dayoffset });
+            res.json({ building, dataToday: [], interpLine: [], dayoffset });
             return;
         }
 
@@ -1045,7 +1032,7 @@ app.get("/api/v1/wifi/building_predict", async (req, res) => {
         }
         if (weeks.length === 0) weeks.push(buildFullWeek([], 3)); // ensure weeks[0] exists
 
-        const predicted = predictLine(method, weeks, currentDayOfWeek, FULL_DAY);
+        const predicted = predictLine(weeks, currentDayOfWeek, FULL_DAY);
         // The in-progress day lives in week[0]; extract it as the "actual so far" series.
         const dataToday = getCurrentDayData(weeks[0], currentDayOfWeek);
 
@@ -1056,7 +1043,6 @@ app.get("/api/v1/wifi/building_predict", async (req, res) => {
             building,
             dataToday,
             interpLine: predicted,
-            method,
             dayoffset,
             queryMs,
         });

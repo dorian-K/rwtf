@@ -2,20 +2,13 @@ import React, { useEffect, useState, Suspense, lazy } from "react";
 import Link from "next/link";
 import { useBackendContext } from "@/components/BackendProvider";
 import { ApexOptions } from "apexcharts";
-import { PredictionMethod, WifiBuildingResponse, WifiBuildingPredictResponse } from "@/api/Backend";
+import { WifiBuildingResponse, WifiBuildingPredictResponse } from "@/api/Backend";
 
 const ReactApexChart = lazy(() =>
     import("react-apexcharts").then((m) => ({
         default: m.default as unknown as React.ComponentType<any>,
     })),
 );
-
-const METHOD_LABELS: Record<PredictionMethod, string> = {
-    closest: "Similar Weeks",
-    average: "Simple Average",
-    median: "Robust Average",
-    dayofweek: "Same Weekday",
-};
 
 // ---------------------------------------------------------------------------
 // History (existing behaviour): multi-day connected-device counts for a building
@@ -171,7 +164,7 @@ function WifiPredictionChart({ data }: { data: WifiBuildingPredictResponse }) {
     };
     const minX = new Date(todayRef).setHours(0, 0, 0, 0);
     const maxX = new Date(todayRef).setHours(23, 59, 59, 999);
-    const methodName = METHOD_LABELS[data.method] ?? "Prediction";
+    const methodName = "Similar Weeks";
 
     const options: ApexOptions = {
         chart: {
@@ -195,8 +188,10 @@ function WifiPredictionChart({ data }: { data: WifiBuildingPredictResponse }) {
         },
         theme: { mode: "dark" },
         tooltip: { x: { format: "HH:mm" } },
-        stroke: { curve: "smooth", width: [3, 2], dashArray: [0, 4] },
-        fill: { type: "solid", opacity: [0.3, 0.05] },
+        // Series order: Devices Today, Confidence band (green, no border), Prediction line (green).
+        colors: ["#008FFB", "#00E396", "#00E396"],
+        stroke: { curve: "smooth", width: [3, 0, 2], dashArray: [0, 0, 4] },
+        fill: { type: "solid", opacity: [0.3, 0.2, 0.05] },
         dataLabels: { enabled: false },
         grid: {
             borderColor: "#636363",
@@ -211,7 +206,17 @@ function WifiPredictionChart({ data }: { data: WifiBuildingPredictResponse }) {
             data: data.dataToday.map((p) => ({ x: adjust(p.created_at), y: p.value })),
         },
         {
+            // ~80% confidence band (p10–p90 of the most similar historical days).
+            name: "Confidence band",
+            type: "rangeArea",
+            data: data.interpLine.map((p) => ({
+                x: adjust(p.created_at),
+                y: [p.lower ?? p.value, p.upper ?? p.value],
+            })),
+        },
+        {
             name: methodName,
+            type: "line",
             data: data.interpLine.map((p) => ({ x: adjust(p.created_at), y: p.value })),
         },
     ];
@@ -232,7 +237,6 @@ function WifiPredictionChart({ data }: { data: WifiBuildingPredictResponse }) {
 }
 
 function WifiPrediction({ building }: { building: string }) {
-    const [method, setMethod] = useState<PredictionMethod>("closest");
     const [data, setData] = useState<WifiBuildingPredictResponse | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
@@ -241,7 +245,7 @@ function WifiPrediction({ building }: { building: string }) {
     const loadData = () => {
         if (!building) return;
         setIsLoading(true);
-        api.getWifiBuildingPredict(building, method)
+        api.getWifiBuildingPredict(building)
             .then((d) => {
                 setData(d);
                 setError(null);
@@ -255,14 +259,7 @@ function WifiPrediction({ building }: { building: string }) {
         const tim = setInterval(loadData, 1000 * 60 * 5);
         return () => clearInterval(tim);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [api, building, method]);
-
-    const methods: { value: PredictionMethod; label: string }[] = [
-        { value: "closest", label: "Similar Weeks ⭐" },
-        { value: "average", label: "Simple Average" },
-        { value: "median", label: "Robust Average" },
-        { value: "dayofweek", label: "Same Weekday" },
-    ];
+    }, [api, building]);
 
     const hasData = data && (data.dataToday.length > 0 || data.interpLine.length > 0);
 
@@ -272,23 +269,6 @@ function WifiPrediction({ building }: { building: string }) {
             <div className="card-body">
                 {error && <div className="alert alert-danger">{error}</div>}
                 <div className="d-flex flex-wrap gap-2 mb-3 align-items-center">
-                    <div className="input-group" style={{ maxWidth: "360px" }}>
-                        <label className="input-group-text" htmlFor="wifiMethodSelect">
-                            Prediction
-                        </label>
-                        <select
-                            className="form-select"
-                            id="wifiMethodSelect"
-                            value={method}
-                            onChange={(e) => setMethod(e.target.value as PredictionMethod)}
-                        >
-                            {methods.map((m) => (
-                                <option key={m.value} value={m.value}>
-                                    {m.label}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
                     <button className="btn btn-primary" onClick={loadData} disabled={isLoading}>
                         Reload
                     </button>

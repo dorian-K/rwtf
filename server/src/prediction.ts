@@ -27,7 +27,20 @@ export interface DayWindow {
 
 export const FULL_DAY: DayWindow = { startHour: 0, endHour: 24 };
 
-export type PredictionMethod = "closest" | "average" | "median" | "dayofweek";
+// A predicted point carries the central estimate plus an empirical confidence band
+// (`lower`/`upper`) derived from the spread of the most-similar historical days at that time.
+export interface PredictedPoint {
+    created_at: number;
+    value: number;
+    lower: number;
+    upper: number;
+}
+
+// Confidence band tuning: how many of the closest historical days to pool, and which weighted
+// quantiles bound the band. p10–p90 gives an ~80% "most similar days landed here" range.
+const CLOSEST_POOL_SIZE = 15;
+const BAND_LOWER_QUANTILE = 0.1;
+const BAND_UPPER_QUANTILE = 0.9;
 
 interface WeightedDayData {
     data: TimeSeriesPiece[];
@@ -83,11 +96,34 @@ function getDaysForWeekday(hist: FullWeek[], dayOfWeek: number): WeightedDayData
     );
 }
 
-function averageDays(dayData: WeightedDayData[], window: DayWindow, useMedian = false) {
+// Weighted quantile with linear interpolation between the two samples straddling the target
+// cumulative weight. `values`/`weights` need not be pre-sorted. Returns 0 for empty input.
+function weightedQuantile(values: number[], weights: number[], q: number): number {
+    if (values.length === 0) return 0;
+    const pairs = values.map((v, i) => ({ v, w: weights[i] })).sort((a, b) => a.v - b.v);
+    const totalWeight = pairs.reduce((s, p) => s + p.w, 0);
+    if (totalWeight <= 0) return pairs[Math.floor((pairs.length - 1) * q)].v;
+
+    const target = q * totalWeight;
+    let cum = 0;
+    for (let i = 0; i < pairs.length; i++) {
+        const prevCum = cum;
+        cum += pairs[i].w;
+        if (cum >= target) {
+            if (i === 0) return pairs[0].v;
+            // Interpolate within this sample's weight span from the previous sample, for a smooth edge.
+            const frac = pairs[i].w > 0 ? (target - prevCum) / pairs[i].w : 0;
+            return pairs[i - 1].v + frac * (pairs[i].v - pairs[i - 1].v);
+        }
+    }
+    return pairs[pairs.length - 1].v;
+}
+
+function averageDays(dayData: WeightedDayData[], window: DayWindow): PredictedPoint[] {
     const base = dayBase();
     const minX = new Date(base).setHours(window.startHour, 0, 0, 0);
     const hrs = window.endHour - window.startHour;
-    const historicAvg = [];
+    const historicAvg: PredictedPoint[] = [];
     const historicData = dayData.map((day) => ({
         data: normalizeDataToTimeOfDay(day.data, base),
         weight: day.weight,
@@ -142,29 +178,23 @@ function averageDays(dayData: WeightedDayData[], window: DayWindow, useMedian = 
         }
 
         let avgValue = 0;
+        let lower = 0;
+        let upper = 0;
         if (values.length > 0) {
-            if (useMedian) {
-                const weightedValues = values.map((v, i) => ({ v, w: weights[i] }));
-                weightedValues.sort((a, b) => a.v - b.v);
-
-                let cumWeight = 0;
-                const halfWeight = totalWeight / 2;
-                for (const item of weightedValues) {
-                    cumWeight += item.w;
-                    if (cumWeight >= halfWeight) {
-                        avgValue = item.v;
-                        break;
-                    }
-                }
-            } else {
-                for (let i = 0; i < values.length; i++) {
-                    avgValue += weights[i] * values[i];
-                }
-                avgValue /= totalWeight;
+            for (let i = 0; i < values.length; i++) {
+                avgValue += weights[i] * values[i];
             }
+            avgValue /= totalWeight;
+
+            // Empirical confidence band from the spread of the pooled days at this bucket.
+            lower = Math.max(0, weightedQuantile(values, weights, BAND_LOWER_QUANTILE));
+            upper = weightedQuantile(values, weights, BAND_UPPER_QUANTILE);
+            // The band must always contain the central estimate.
+            lower = Math.min(lower, avgValue);
+            upper = Math.max(upper, avgValue);
         }
 
-        historicAvg.push({ created_at: time, value: avgValue });
+        historicAvg.push({ created_at: time, value: avgValue, lower, upper });
     }
 
     return historicAvg;
@@ -177,26 +207,8 @@ function getCurrentDayData(currentWeek: FullWeek, currentDayOfWeek: number): Tim
     return matchingDay ?? [];
 }
 
-function makeAverageLine(
-    hist: FullWeek[],
-    currentDayOfWeek: number,
-    window: DayWindow = FULL_DAY,
-    useMedian = false,
-) {
-    return averageDays(getDaysForWeekday(hist, currentDayOfWeek), window, useMedian);
-}
-
-function makeDayOfWeekLine(
-    hist: FullWeek[],
-    currentDayOfWeek: number,
-    window: DayWindow = FULL_DAY,
-) {
-    const filteredData = getDaysForWeekday(hist, currentDayOfWeek);
-    if (filteredData.length === 0) {
-        return averageDays(flattenWeeksToDays(hist), window);
-    }
-
-    return averageDays(filteredData, window);
+function makeAverageLine(hist: FullWeek[], currentDayOfWeek: number, window: DayWindow = FULL_DAY) {
+    return averageDays(getDaysForWeekday(hist, currentDayOfWeek), window);
 }
 
 function makeClosestLine(
@@ -305,17 +317,21 @@ function makeClosestLine(
         };
     });
 
-    const closestDays = distances
+    // Pool the closest matches (dropping days we couldn't score), then weight them by rank so the
+    // center line still favors the best matches while the band spans the whole pool.
+    const ranked = distances
+        .filter((d) => isFinite(d.distance))
         .sort((a, b) => a.distance - b.distance)
-        .slice(0, 5)
-        .map((d) => ({
-            data: d.day.data,
-            weight: 1,
-        }));
+        .slice(0, CLOSEST_POOL_SIZE);
 
-    if (closestDays.length === 0) {
-        return [];
+    if (ranked.length === 0) {
+        return makeAverageLine(hist, currentDayOfWeek, window);
     }
+
+    const closestDays = ranked.map((d, rank) => ({
+        data: d.day.data,
+        weight: CLOSEST_POOL_SIZE - rank,
+    }));
 
     return averageDays(closestDays, window);
 }
@@ -341,32 +357,20 @@ function buildFullWeek(data: TimeSeriesPiece[], weight: number): FullWeek {
     };
 }
 
-// Dispatch to the requested prediction method, mirroring the original gym switch:
-// "closest" compares today against history (week[0] is the in-progress week); the rest aggregate.
+// Predict the day's curve with the "closest weeks" method: compare today (weeks[0], the in-progress
+// week) against history (weeks[1..]), average the most-similar days, and attach an empirical band.
 function predictLine(
-    method: PredictionMethod,
     weeks: FullWeek[],
     currentDayOfWeek: number,
     window: DayWindow = FULL_DAY,
-): TimeSeriesPiece[] {
-    switch (method) {
-        case "average":
-            return makeAverageLine(weeks, currentDayOfWeek, window);
-        case "median":
-            return makeAverageLine(weeks, currentDayOfWeek, window, true);
-        case "dayofweek":
-            return makeDayOfWeekLine(weeks, currentDayOfWeek, window);
-        case "closest":
-        default:
-            return makeClosestLine(weeks.slice(1), weeks[0], currentDayOfWeek, window);
-    }
+): PredictedPoint[] {
+    return makeClosestLine(weeks.slice(1), weeks[0], currentDayOfWeek, window);
 }
 
 export {
     buildFullWeek,
     makeAverageLine,
     makeClosestLine,
-    makeDayOfWeekLine,
     getCurrentDayData,
     predictLine,
 };

@@ -1,6 +1,9 @@
 export interface GymDataPiece {
     auslastung: number;
     created_at: string;
+    // Confidence band around the prediction (present only on prediction points).
+    lower?: number;
+    upper?: number;
 }
 
 export interface GymResponse {
@@ -11,7 +14,6 @@ export interface GymResponse {
 export interface GymInterpLineResponse {
     interpLine: GymDataPiece[];
     allTimeHigh: number;
-    method?: string;
 }
 
 export interface HistoryDataPoint {
@@ -59,8 +61,6 @@ export interface HourlyPatternResponse {
     queryMs: number;
 }
 
-export type PredictionMethod = "closest" | "average" | "median" | "dayofweek";
-
 export interface WifiBuildingCurrent {
     total_users: number;
     active_aps: number;
@@ -85,13 +85,15 @@ export interface WifiSeriesPoint {
     value: number;
     // Actual points arrive as datetime strings; predicted points as epoch-ms numbers.
     created_at: string | number;
+    // Confidence band around the prediction (present only on prediction points).
+    lower?: number;
+    upper?: number;
 }
 
 export interface WifiBuildingPredictResponse {
     building: string;
     dataToday: WifiSeriesPoint[];
     interpLine: WifiSeriesPoint[];
-    method: PredictionMethod;
     dayoffset: number;
 }
 
@@ -150,13 +152,8 @@ export class Backend {
         return this.processResponse(this.fetch("/api/v1/gym?dayoffset=" + dayoffset));
     }
 
-    getGymInterpLine(
-        dayoffset: number,
-        method: PredictionMethod = "closest",
-    ): Promise<GymInterpLineResponse> {
-        return this.processResponse(
-            this.fetch("/api/v1/gym_interpline?dayoffset=" + dayoffset + "&method=" + method),
-        );
+    getGymInterpLine(dayoffset: number): Promise<GymInterpLineResponse> {
+        return this.processResponse(this.fetch("/api/v1/gym_interpline?dayoffset=" + dayoffset));
     }
 
     isAachener(): Promise<boolean> {
@@ -227,14 +224,9 @@ export class Backend {
         );
     }
 
-    getWifiBuildingPredict(
-        building: string,
-        method: PredictionMethod = "closest",
-    ): Promise<WifiBuildingPredictResponse> {
+    getWifiBuildingPredict(building: string): Promise<WifiBuildingPredictResponse> {
         return this.processResponse(
-            this.fetch(
-                `/api/v1/wifi/building_predict?building=${encodeURIComponent(building)}&method=${method}`,
-            ),
+            this.fetch(`/api/v1/wifi/building_predict?building=${encodeURIComponent(building)}`),
         );
     }
 }

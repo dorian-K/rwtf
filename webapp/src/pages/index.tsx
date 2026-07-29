@@ -1,7 +1,6 @@
 import {
     GymInterpLineResponse,
     GymResponse,
-    PredictionMethod,
     StudyFileResult,
     StudyInspectResponse,
 } from "@/api/Backend";
@@ -14,15 +13,26 @@ import { EMBED_CODE } from "./embed_gym";
 
 const ReactApexChart = React.lazy(() => import("react-apexcharts"));
 
+// ApexCharts' default palette tail, used for the (hidden-by-default) "x weeks ago" series. We set
+// colors explicitly so inserting the confidence-band series doesn't reshuffle the other series'
+// colors: Utilization stays blue, the band + prediction line share green.
+const GYM_HISTORIC_COLORS = [
+    "#FF4560",
+    "#775DD0",
+    "#3F51B5",
+    "#546E7A",
+    "#D4526E",
+    "#8D5B4C",
+    "#F86624",
+    "#D7263D",
+    "#1B998B",
+    "#2E294E",
+    "#F46036",
+    "#E2C044",
+];
+
 function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineResponse }) {
-    const methodName = gymLine.method
-        ? {
-              closest: "Similar Weeks",
-              average: "Simple Average",
-              median: "Robust Average",
-              dayofweek: "Same Weekday",
-          }[gymLine.method] || "Prediction"
-        : "Prediction";
+    const methodName = "Similar Weeks";
     let todayReference;
     if (gym.data_today.length > 0) {
         todayReference = new Date(gym.data_today[0].created_at);
@@ -94,10 +104,14 @@ function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineR
         dataLabels: {
             enabled: false,
         },
+        colors: ["#008FFB", "#00E396", "#00E396", "#FEB019"].concat(
+            historicData.map((_, i) => GYM_HISTORIC_COLORS[i % GYM_HISTORIC_COLORS.length]),
+        ),
         stroke: {
             curve: "smooth",
-            width: [3, 2, 2].concat(new Array(historicData.length).fill(1)),
-            dashArray: [0, 1, 1].concat(new Array(historicData.length).fill(3)),
+            // Series order: Utilization, Confidence band (no border), Prediction, Historic Arrival.
+            width: [3, 0, 2, 2].concat(new Array(historicData.length).fill(1)),
+            dashArray: [0, 0, 1, 1].concat(new Array(historicData.length).fill(3)),
         },
         title: {
             text: `RWTH Gym Utilization · ${currentTimestamp}`,
@@ -121,7 +135,7 @@ function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineR
         },
         fill: {
             type: "solid",
-            opacity: [0.4, 0.15, 0.15].concat(new Array(historicData.length).fill(0.02)),
+            opacity: [0.4, 0.2, 0.15, 0.15].concat(new Array(historicData.length).fill(0.02)),
         },
         annotations: {
             yaxis: [
@@ -192,7 +206,18 @@ function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineR
             })),
         },
         {
+            // ~80% confidence band (p10–p90 of the most similar historical days) drawn as a shaded
+            // area behind the prediction line.
+            name: "Confidence band",
+            type: "rangeArea",
+            data: gymLine.interpLine.map((g) => ({
+                x: adjustDate(new Date(g.created_at)),
+                y: [g.lower ?? g.auslastung, g.upper ?? g.auslastung],
+            })),
+        },
+        {
             name: methodName,
+            type: "line",
             data: gymLine.interpLine.map((g) => {
                 const gDate = new Date(g.created_at);
                 return {
@@ -241,47 +266,11 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
 
     const days = ["Today", "Tomorrow", "+2 days", "+3 days"];
     const [dayoffset, setDayoffset] = useState(0);
-    const methods: {
-        value: PredictionMethod;
-        label: string;
-        shortDesc: string;
-        fullDesc: string;
-    }[] = [
-        {
-            value: "closest",
-            label: "Similar Weeks ⭐",
-            shortDesc: "Finds weeks with similar patterns",
-            fullDesc:
-                "Finds historical weeks with a similar crowd pattern to today and averages them. Captures both the day-of-week effect AND unusual events (e.g., holidays). Most accurate when past weeks had clear, consistent patterns.",
-        },
-        {
-            value: "average",
-            label: "Simple Average",
-            shortDesc: "Weighted average of all past weeks",
-            fullDesc:
-                "A weighted average of all historical weeks. Recent weeks count 3x more than older ones. Smooths out noise but can be skewed by unusually crowded or empty weeks.",
-        },
-        {
-            value: "median",
-            label: "Robust Average",
-            shortDesc: "Median-based, ignores outliers",
-            fullDesc:
-                "Like Simple Average but uses median instead of mean. Extreme values (packed or empty weeks) have less influence. More stable when data contains unusual weeks.",
-        },
-        {
-            value: "dayofweek",
-            label: "Same Weekday",
-            shortDesc: "Only uses data from the same day of week",
-            fullDesc:
-                "Only looks at data from the same day of week (e.g., all Mondays). Best for capturing the regular weekly rhythm. Ignores longer-term trends and anomalies.",
-        },
-    ];
-    const [method, setMethod] = useState<PredictionMethod>("closest");
     const api = useBackendContext();
 
     const reloadData = () => {
         setIsLoading(true);
-        const prom = Promise.all([api.getGym(dayoffset), api.getGymInterpLine(dayoffset, method)]);
+        const prom = Promise.all([api.getGym(dayoffset), api.getGymInterpLine(dayoffset)]);
         prom.then((res) => {
             setGym(res[0]);
             setGymLine(res[1]);
@@ -311,7 +300,7 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
             clearInterval(tim);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [api, dayoffset, method]);
+    }, [api, dayoffset]);
 
     return (
         <>
@@ -343,30 +332,6 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
                             </button>
                         ))}
                     </div>
-                    <div className="input-group" style={{ maxWidth: "400px" }}>
-                        <label className="input-group-text" htmlFor="methodSelect">
-                            Prediction:
-                        </label>
-                        <select
-                            className="form-select"
-                            id="methodSelect"
-                            value={method}
-                            onChange={(e) => setMethod(e.target.value as PredictionMethod)}
-                            title={methods.find((m) => m.value === method)?.fullDesc}
-                        >
-                            {methods.map((m) => (
-                                <option key={m.value} value={m.value} title={m.fullDesc}>
-                                    {m.label}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-                    {method === "closest" && (
-                        <small className="text-muted ms-2 mt-1">
-                            <span className="badge bg-success me-1">Recommended</span>
-                            Best overall accuracy for regular gym usage.
-                        </small>
-                    )}
                     {isLoading && <div className="spinner-border"></div>}
                 </div>
             )}
@@ -584,7 +549,8 @@ function GymStuff() {
                                 Prediction of the number of people in the gym for the remainder of
                                 the day, based on historical data and the current trend. Prediction
                                 for the current day becomes more accurate as the day progresses and
-                                more data points are available.
+                                more data points are available. The shaded band around the line is
+                                an ~80% confidence range — most similar past days fell within it.
                             </dd>
                             <dt>
                                 <strong>Historic Arrival</strong>:
