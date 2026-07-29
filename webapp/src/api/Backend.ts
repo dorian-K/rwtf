@@ -1,9 +1,12 @@
 export interface GymDataPiece {
     auslastung: number;
     created_at: string;
-    // Confidence band around the prediction (present only on prediction points).
+    // Confidence bands around the prediction (present only on prediction points): lower/upper is the
+    // tight 50% band, lowerWide/upperWide the full range.
     lower?: number;
     upper?: number;
+    lowerWide?: number;
+    upperWide?: number;
 }
 
 export interface GymResponse {
@@ -85,9 +88,12 @@ export interface WifiSeriesPoint {
     value: number;
     // Actual points arrive as datetime strings; predicted points as epoch-ms numbers.
     created_at: string | number;
-    // Confidence band around the prediction (present only on prediction points).
+    // Confidence bands around the prediction (present only on prediction points): lower/upper is the
+    // tight 50% band, lowerWide/upperWide the full range.
     lower?: number;
     upper?: number;
+    lowerWide?: number;
+    upperWide?: number;
 }
 
 export interface WifiBuildingPredictResponse {

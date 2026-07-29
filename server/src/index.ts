@@ -185,11 +185,13 @@ app.get("/api/v1/gym_interpline", async (req, res) => {
         }
 
         const predicted = predictLine(weeks, currentDayOfWeek, GYM_WINDOW);
-        // Map back to the gym's wire format (`auslastung`), carrying the confidence band.
+        // Map back to the gym's wire format (`auslastung`), carrying both confidence bands.
         const interpLine = predicted.map((p) => ({
             auslastung: p.value,
             lower: p.lower,
             upper: p.upper,
+            lowerWide: p.lowerWide,
+            upperWide: p.upperWide,
             created_at: p.created_at,
         }));
 

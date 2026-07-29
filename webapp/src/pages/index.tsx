@@ -104,14 +104,14 @@ function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineR
         dataLabels: {
             enabled: false,
         },
-        colors: ["#008FFB", "#00E396", "#00E396", "#FEB019"].concat(
+        colors: ["#008FFB", "#00E396", "#00E396", "#00E396", "#FEB019"].concat(
             historicData.map((_, i) => GYM_HISTORIC_COLORS[i % GYM_HISTORIC_COLORS.length]),
         ),
         stroke: {
             curve: "smooth",
-            // Series order: Utilization, Confidence band (no border), Prediction, Historic Arrival.
-            width: [3, 0, 2, 2].concat(new Array(historicData.length).fill(1)),
-            dashArray: [0, 0, 1, 1].concat(new Array(historicData.length).fill(3)),
+            // Series order: Utilization, 100% band, 50% band (both borderless), Prediction, Arrival.
+            width: [3, 0, 0, 3, 2].concat(new Array(historicData.length).fill(1)),
+            dashArray: [0, 0, 0, 0, 1].concat(new Array(historicData.length).fill(3)),
         },
         title: {
             text: `RWTH Gym Utilization · ${currentTimestamp}`,
@@ -135,7 +135,9 @@ function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineR
         },
         fill: {
             type: "solid",
-            opacity: [0.4, 0.2, 0.15, 0.15].concat(new Array(historicData.length).fill(0.02)),
+            opacity: [0.4, 0.12, 0.22, 0.15, 0.15].concat(
+                new Array(historicData.length).fill(0.02),
+            ),
         },
         annotations: {
             yaxis: [
@@ -195,6 +197,23 @@ function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineR
     }
     //smoothedArrivals.push(historicArrivals[historicArrivals.length - 1]);
 
+    // Interpolate today's actual utilization at an arbitrary time (ms), or null outside its range.
+    // Used to keep the 100% band from ever excluding what actually happened.
+    const actualAt = (t: number): number | null => {
+        if (data.length === 0 || t < data[0].created_at || t > data[data.length - 1].created_at) {
+            return null;
+        }
+        for (let i = 1; i < data.length; i++) {
+            if (data[i].created_at >= t) {
+                const a = data[i - 1];
+                const b = data[i];
+                const span = b.created_at - a.created_at || 1;
+                return a.auslastung + ((t - a.created_at) / span) * (b.auslastung - a.auslastung);
+            }
+        }
+        return data[data.length - 1].auslastung;
+    };
+
     let series: ApexOptions["series"] = [
         {
             name: "Utilization",
@@ -206,9 +225,25 @@ function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineR
             })),
         },
         {
-            // ~80% confidence band (p10–p90 of the most similar historical days) drawn as a shaded
-            // area behind the prediction line.
-            name: "Confidence band",
+            // Full range (min–max of the most similar historical days), widened where needed so it
+            // always contains today's actual utilization.
+            name: "100% range",
+            type: "rangeArea",
+            data: gymLine.interpLine.map((g) => {
+                const x = adjustDate(new Date(g.created_at));
+                let lo = g.lowerWide ?? g.auslastung;
+                let hi = g.upperWide ?? g.auslastung;
+                const act = actualAt(x);
+                if (act !== null) {
+                    lo = Math.min(lo, act);
+                    hi = Math.max(hi, act);
+                }
+                return { x, y: [lo, hi] };
+            }),
+        },
+        {
+            // Tight middle-50% (inter-quartile) band.
+            name: "50% range",
             type: "rangeArea",
             data: gymLine.interpLine.map((g) => ({
                 x: adjustDate(new Date(g.created_at)),
@@ -218,6 +253,7 @@ function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineR
         {
             name: methodName,
             type: "line",
+            zIndex: 5,
             data: gymLine.interpLine.map((g) => {
                 const gDate = new Date(g.created_at);
                 return {
@@ -549,8 +585,8 @@ function GymStuff() {
                                 Prediction of the number of people in the gym for the remainder of
                                 the day, based on historical data and the current trend. Prediction
                                 for the current day becomes more accurate as the day progresses and
-                                more data points are available. The shaded band around the line is
-                                an ~80% confidence range — most similar past days fell within it.
+                                more data points are available. The two shaded bands show the middle
+                                50% and the full range of the most similar past days.
                             </dd>
                             <dt>
                                 <strong>Historic Arrival</strong>:

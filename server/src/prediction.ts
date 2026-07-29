@@ -27,20 +27,23 @@ export interface DayWindow {
 
 export const FULL_DAY: DayWindow = { startHour: 0, endHour: 24 };
 
-// A predicted point carries the central estimate plus an empirical confidence band
-// (`lower`/`upper`) derived from the spread of the most-similar historical days at that time.
+// A predicted point carries the central estimate plus two empirical confidence bands derived from
+// the spread of the most-similar historical days at that time: a tight inner band (`lower`/`upper`,
+// the middle 50%) and the full outer envelope (`lowerWide`/`upperWide`, min–max of the pool).
 export interface PredictedPoint {
     created_at: number;
     value: number;
     lower: number;
     upper: number;
+    lowerWide: number;
+    upperWide: number;
 }
 
-// Confidence band tuning: how many of the closest historical days to pool, and which weighted
-// quantiles bound the band. p10–p90 gives an ~80% "most similar days landed here" range.
+// How many of the closest historical days to pool for the prediction + bands.
 const CLOSEST_POOL_SIZE = 15;
-const BAND_LOWER_QUANTILE = 0.1;
-const BAND_UPPER_QUANTILE = 0.9;
+// Inner band = middle 50% (inter-quartile). The outer band uses the 0/1 quantiles (min–max).
+const BAND_INNER_LOWER_QUANTILE = 0.25;
+const BAND_INNER_UPPER_QUANTILE = 0.75;
 
 interface WeightedDayData {
     data: TimeSeriesPiece[];
@@ -180,21 +183,28 @@ function averageDays(dayData: WeightedDayData[], window: DayWindow): PredictedPo
         let avgValue = 0;
         let lower = 0;
         let upper = 0;
+        let lowerWide = 0;
+        let upperWide = 0;
         if (values.length > 0) {
             for (let i = 0; i < values.length; i++) {
                 avgValue += weights[i] * values[i];
             }
             avgValue /= totalWeight;
 
-            // Empirical confidence band from the spread of the pooled days at this bucket.
-            lower = Math.max(0, weightedQuantile(values, weights, BAND_LOWER_QUANTILE));
-            upper = weightedQuantile(values, weights, BAND_UPPER_QUANTILE);
-            // The band must always contain the central estimate.
+            // Two empirical bands from the spread of the pooled days at this bucket: a tight 50%
+            // (inter-quartile) band and the full 100% (min–max) envelope.
+            lower = weightedQuantile(values, weights, BAND_INNER_LOWER_QUANTILE);
+            upper = weightedQuantile(values, weights, BAND_INNER_UPPER_QUANTILE);
+            lowerWide = weightedQuantile(values, weights, 0);
+            upperWide = weightedQuantile(values, weights, 1);
+            // The inner band must contain the central estimate; the outer must contain the inner.
             lower = Math.min(lower, avgValue);
             upper = Math.max(upper, avgValue);
+            lowerWide = Math.min(lowerWide, lower);
+            upperWide = Math.max(upperWide, upper);
         }
 
-        historicAvg.push({ created_at: time, value: avgValue, lower, upper });
+        historicAvg.push({ created_at: time, value: avgValue, lower, upper, lowerWide, upperWide });
     }
 
     return historicAvg;

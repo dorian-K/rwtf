@@ -188,10 +188,10 @@ function WifiPredictionChart({ data }: { data: WifiBuildingPredictResponse }) {
         },
         theme: { mode: "dark" },
         tooltip: { x: { format: "HH:mm" } },
-        // Series order: Devices Today, Confidence band (green, no border), Prediction line (green).
-        colors: ["#008FFB", "#00E396", "#00E396"],
-        stroke: { curve: "smooth", width: [3, 0, 2], dashArray: [0, 0, 4] },
-        fill: { type: "solid", opacity: [0.3, 0.2, 0.05] },
+        // Series order: Devices Today, 100% band, 50% band (green, borderless), Prediction (green).
+        colors: ["#008FFB", "#00E396", "#00E396", "#00E396"],
+        stroke: { curve: "smooth", width: [3, 0, 0, 3], dashArray: [0, 0, 0, 4] },
+        fill: { type: "solid", opacity: [0.3, 0.12, 0.22, 0.05] },
         dataLabels: { enabled: false },
         grid: {
             borderColor: "#636363",
@@ -200,14 +200,50 @@ function WifiPredictionChart({ data }: { data: WifiBuildingPredictResponse }) {
         noData: { text: "No data", style: { color: "#aaa" } },
     };
 
+    // Interpolate today's actual device count at an arbitrary time (ms), or null outside its range.
+    // Keeps the 100% band from ever excluding what actually happened.
+    const actualPts = data.dataToday
+        .map((p) => ({ x: adjust(p.created_at), y: p.value }))
+        .sort((a, b) => a.x - b.x);
+    const actualAt = (t: number): number | null => {
+        if (actualPts.length === 0 || t < actualPts[0].x || t > actualPts[actualPts.length - 1].x) {
+            return null;
+        }
+        for (let i = 1; i < actualPts.length; i++) {
+            if (actualPts[i].x >= t) {
+                const a = actualPts[i - 1];
+                const b = actualPts[i];
+                const span = b.x - a.x || 1;
+                return a.y + ((t - a.x) / span) * (b.y - a.y);
+            }
+        }
+        return actualPts[actualPts.length - 1].y;
+    };
+
     const series: ApexOptions["series"] = [
         {
             name: "Devices Today",
-            data: data.dataToday.map((p) => ({ x: adjust(p.created_at), y: p.value })),
+            data: actualPts,
         },
         {
-            // ~80% confidence band (p10–p90 of the most similar historical days).
-            name: "Confidence band",
+            // Full range (min–max), widened where needed to always contain today's actual count.
+            name: "100% range",
+            type: "rangeArea",
+            data: data.interpLine.map((p) => {
+                const x = adjust(p.created_at);
+                let lo = p.lowerWide ?? p.value;
+                let hi = p.upperWide ?? p.value;
+                const act = actualAt(x);
+                if (act !== null) {
+                    lo = Math.min(lo, act);
+                    hi = Math.max(hi, act);
+                }
+                return { x, y: [lo, hi] };
+            }),
+        },
+        {
+            // Tight middle-50% (inter-quartile) band.
+            name: "50% range",
             type: "rangeArea",
             data: data.interpLine.map((p) => ({
                 x: adjust(p.created_at),
@@ -217,6 +253,7 @@ function WifiPredictionChart({ data }: { data: WifiBuildingPredictResponse }) {
         {
             name: methodName,
             type: "line",
+            zIndex: 5,
             data: data.interpLine.map((p) => ({ x: adjust(p.created_at), y: p.value })),
         },
     ];
