@@ -225,9 +225,10 @@ function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineR
             })),
         },
         {
-            // Full range (min–max of the most similar historical days), widened where needed so it
-            // always contains today's actual utilization.
-            name: "100% range",
+            // Outer band: min–max of the most similar historical days, widened where needed so it
+            // always contains today's actual utilization. Backtesting puts its real forecast
+            // coverage at ~90% (min/max of a ~15-day pool covers ≈(n−1)/(n+1)), hence the label.
+            name: "~90% range",
             type: "rangeArea",
             data: gymLine.interpLine.map((g) => {
                 const x = adjustDate(new Date(g.created_at));
@@ -586,7 +587,7 @@ function GymStuff() {
                                 the day, based on historical data and the current trend. Prediction
                                 for the current day becomes more accurate as the day progresses and
                                 more data points are available. The two shaded bands show the middle
-                                50% and the full range of the most similar past days.
+                                50% and roughly the 90% range of the most similar past days.
                             </dd>
                             <dt>
                                 <strong>Historic Arrival</strong>:

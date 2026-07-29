@@ -226,8 +226,9 @@ function WifiPredictionChart({ data }: { data: WifiBuildingPredictResponse }) {
             data: actualPts,
         },
         {
-            // Full range (min–max), widened where needed to always contain today's actual count.
-            name: "100% range",
+            // Outer band: min–max of the similar-day pool (~90% empirical forecast coverage),
+            // widened where needed to always contain today's actual count.
+            name: "~90% range",
             type: "rangeArea",
             data: data.interpLine.map((p) => {
                 const x = adjust(p.created_at);

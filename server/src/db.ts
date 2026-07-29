@@ -1,10 +1,11 @@
 import mariadb from "mariadb";
 
 const pool = mariadb.createPool({
-    host: "mariadb",
-    user: "myuser",
-    password: "mypassword",
-    database: "mydatabase",
+    host: process.env.DB_HOST ?? "mariadb",
+    port: process.env.DB_PORT ? parseInt(process.env.DB_PORT) : 3306,
+    user: process.env.DB_USER ?? "myuser",
+    password: process.env.DB_PASSWORD ?? "mypassword",
+    database: process.env.DB_NAME ?? "mydatabase",
     connectionLimit: 5,
 });
 
