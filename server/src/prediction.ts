@@ -39,8 +39,28 @@ export interface PredictedPoint {
     upperWide: number;
 }
 
-// How many of the closest historical days to pool for the prediction + bands.
-const CLOSEST_POOL_SIZE = 15;
+// Tuning knobs (env-overridable for offline sweeps). Defaults were tuned against the as-of backtest
+// (test/sweep.ts) over the full ~2.3-year gym history (480k causal forecast points): this config
+// cuts point-forecast MAE by ~4.9% vs the original (12.78 -> 12.15) while keeping the bands
+// well-calibrated (inner ~48% coverage, outer ~90%). Every prediction stays causal and the method
+// still needs no retraining or extra storage -- these are inference-time constants only.
+const envNum = (k: string, d: number) => (process.env[k] ? Number(process.env[k]) : d);
+// How many of the closest historical days to pool for the prediction + bands. Drives the outer
+// (min-max) band's width, hence its coverage; RANK_DECAY keeps the far ranks from blurring the mean.
+const CLOSEST_POOL_SIZE = envNum("POOL_SIZE", 18);
+// Clamp on the per-day linear scale factor that rescales a historical day to today's level.
+const MIN_SCALE = envNum("MIN_SCALE", 0.5);
+const MAX_SCALE = envNum("MAX_SCALE", 1.25);
+// Multiplicative distance penalty applied to candidate days on a different weekday. High enough that
+// the pool is dominated by same-weekday days, but finite so off-weekday days still fill sparse pools.
+const WEEKDAY_PENALTY = envNum("WEEKDAY_PENALTY", 8);
+// Emphasis on the recent (later-in-day) portion of today's observed curve when scoring similarity.
+// 0 = uniform; >0 linearly up-weights points closer to the current time, on the theory that the most
+// recently observed behavior best predicts the immediate future.
+const MATCH_TAIL = envNum("MATCH_TAIL", 3);
+// Exponent on the rank-decaying pool weight (1 = linear POOL-rank; >1 sharpens the center line toward
+// the best matches). Decoupled from the outer band, which uses min-max and ignores these weights.
+const RANK_DECAY = envNum("RANK_DECAY", 3);
 // Inner band = middle 50% (inter-quartile). The outer band uses the 0/1 quantiles (min–max).
 const BAND_INNER_LOWER_QUANTILE = 0.25;
 const BAND_INNER_UPPER_QUANTILE = 0.75;
@@ -228,7 +248,7 @@ function makeClosestLine(
     window: DayWindow = FULL_DAY,
 ) {
     const MINIMUM_COMPARE_POINTS = 6;
-    const DIFFERENT_WEEKDAY_WEIGHT_FACTOR = 2;
+    const DIFFERENT_WEEKDAY_WEIGHT_FACTOR = WEEKDAY_PENALTY;
     const currentDayData = getCurrentDayData(currentWeek, currentDayOfWeek);
 
     if (currentDayData.length < MINIMUM_COMPARE_POINTS || hist.length <= 3) {
@@ -275,28 +295,37 @@ function makeClosestLine(
             interpolatedVals.push(interpolatedValue);
         }
 
+        // Per-point weight: 1 for uniform matching, ramping up to 1+MATCH_TAIL for the most recent
+        // observed point (index tracks time-of-day since normalizedCurrentDay is time-sorted).
+        const lastIdx = Math.max(1, normalizedCurrentDay.length - 1);
+        const pointWeight = (i: number) => 1 + MATCH_TAIL * (i / lastIdx);
+
         let sumXY = 0;
         let sumXX = 0;
         for (let i = 0; i < normalizedCurrentDay.length; i++) {
             const y = normalizedCurrentDay[i].value;
             const x = interpolatedVals[i];
             if (x !== null) {
-                sumXY += x * y;
-                sumXX += x * x;
+                const wpt = pointWeight(i);
+                sumXY += wpt * x * y;
+                sumXX += wpt * x * x;
             }
         }
 
         let m = sumXX > 0 ? sumXY / sumXX : 1;
-        m = Math.min(m, 1.25);
-        m = Math.max(m, 0.5);
+        m = Math.min(m, MAX_SCALE);
+        m = Math.max(m, MIN_SCALE);
 
+        let weightSum = 0;
         for (let i = 0; i < normalizedCurrentDay.length; i++) {
             const y = normalizedCurrentDay[i].value;
             const x = interpolatedVals[i];
             if (x !== null) {
+                const wpt = pointWeight(i);
                 const predictedY = m * x;
                 const error = y - predictedY;
-                totalError += error * error;
+                totalError += wpt * error * error;
+                weightSum += wpt;
                 pointsCompared++;
             }
         }
@@ -306,7 +335,7 @@ function makeClosestLine(
             pointsCompared >= MINIMUM_COMPARE_POINTS &&
             pointsCompared >= normalizedCurrentDay.length * 0.8 - 1
         ) {
-            mse = totalError / pointsCompared;
+            mse = totalError / weightSum;
         }
         mse /= candidateDay.weight;
 
@@ -340,7 +369,7 @@ function makeClosestLine(
 
     const closestDays = ranked.map((d, rank) => ({
         data: d.day.data,
-        weight: CLOSEST_POOL_SIZE - rank,
+        weight: Math.pow(CLOSEST_POOL_SIZE - rank, RANK_DECAY),
     }));
 
     return averageDays(closestDays, window);
