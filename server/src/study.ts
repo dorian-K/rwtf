@@ -2,6 +2,7 @@ import fetch from "node-fetch";
 import fs from "fs";
 import fsPromises from "fs/promises";
 import path from "path";
+import { pipeline as streamPipeline } from "stream/promises";
 import { Request, Response } from "express";
 import ipRangeCheck from "ip-range-check";
 import { getConnection } from "./db.js";
@@ -50,6 +51,19 @@ class UserError extends Error {
     constructor(message: string) {
         super(message);
     }
+}
+
+// The remote filename is untrusted and ends up both in the CDN URL and in a local path, so only a
+// plain alphanumeric suffix is accepted. Names without a dot ("Übungsblatt 0 - ... WiSe 2025/26")
+// would otherwise yield an "extension" containing a slash and point the write stream at a
+// directory that doesn't exist.
+function safeExtension(filename: string): string {
+    const dot = filename.lastIndexOf(".");
+    const ext = dot > 0 ? filename.slice(dot + 1) : "";
+    if (!/^[a-zA-Z0-9]{1,10}$/.test(ext)) {
+        throw new UserError("Unsupported file name, could not determine file type");
+    }
+    return ext.toLowerCase();
 }
 
 // Bump the per-file download counter (how often a file was fetched through our site). Fire and
@@ -108,7 +122,7 @@ async function downloadStudyFunky(origUrl: string) {
         throw new UserError("Failed to fetch file, missing data");
     }
     let name = data["filename"];
-    let ending = name.split(".").pop();
+    let ending = safeExtension(String(name ?? ""));
     let preview = data["file_preview"];
     let token = preview.split("token=").pop();
     let dlUrl = `https://cdn.${BASE}.net/d/prod/documents/${docId}/original/${docId}.${ending}?token=${token}`;
@@ -132,15 +146,20 @@ async function downloadStudyFunky(origUrl: string) {
         redirect: "follow",
         headers: FETCH_HEADERS,
     });
+    if (!fileResponse.ok || !fileResponse.body) {
+        throw new UserError(`Failed to fetch file, upstream returned ${fileResponse.status}`);
+    }
 
-    // stream save file
-    const dest = fs.createWriteStream(savePath);
-    fileResponse.body?.pipe(dest);
-    // wait for file to be saved
+    // stream save file. pipeline() propagates stream errors as a rejection — a raw pipe() would
+    // emit an unhandled 'error' event and take the whole process down.
     console.log("Downloading file...");
-    await new Promise((resolve) => {
-        dest.on("finish", () => resolve(null));
-    });
+    try {
+        await streamPipeline(fileResponse.body, fs.createWriteStream(savePath));
+    } catch (err) {
+        // don't leave a half-written file behind for the cache/existsSync checks to trip over
+        await fsPromises.rm(savePath, { force: true }).catch(() => {});
+        throw err;
+    }
     console.log("Downloaded file to", savePath);
 
     // cache
