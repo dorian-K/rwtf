@@ -132,6 +132,33 @@ export interface StudyInspectResponse {
     metadata: Record<string, any> | null;
 }
 
+// `code` mirrors the backend's error codes ("unknown_type", "upstream", "invalid_url",
+// "not_aachen", "internal") plus "network" for a request that never made it there.
+export class StudyDownloadError extends Error {
+    code: string;
+
+    constructor(code: string, message: string) {
+        super(message);
+        this.code = code;
+    }
+}
+
+// Pull the filename out of Content-Disposition, preferring the RFC 5987 form (which survives
+// umlauts) over the ASCII fallback. Returns null if the header is absent or unparseable.
+function filenameFromDisposition(header: string | null): string | null {
+    if (!header) return null;
+    const encoded = /filename\*=UTF-8''([^;]+)/i.exec(header);
+    if (encoded) {
+        try {
+            return decodeURIComponent(encoded[1]);
+        } catch {
+            // fall through to the plain form
+        }
+    }
+    const plain = /filename="([^"]+)"/i.exec(header);
+    return plain ? plain[1] : null;
+}
+
 export class Backend {
     fetch(input: string, init?: RequestInit): Promise<Response> {
         return fetch(input, init);
@@ -169,7 +196,44 @@ export class Backend {
     }
 
     getStudyUrl(url: string): string {
-        return `/api/v1/study?url=${url}`;
+        return `/api/v1/study?url=${encodeURIComponent(url)}`;
+    }
+
+    // Fetch the document as a blob rather than navigating to it. Navigation hands failures to the
+    // browser, which saves the error JSON as a file named after the route ("study"); going through
+    // fetch lets the page render the actual reason instead.
+    async downloadStudyFile(url: string): Promise<void> {
+        let res: Response;
+        try {
+            res = await this.fetch(this.getStudyUrl(url));
+        } catch {
+            throw new StudyDownloadError("network", "Could not reach the server. Are you online?");
+        }
+
+        if (!res.ok) {
+            let code = "internal";
+            let msg = `The server responded with ${res.status}.`;
+            try {
+                const body = await res.json();
+                if (body?.msg) msg = body.msg;
+                if (body?.code) code = body.code;
+            } catch {
+                // non-json error body (nginx, proxy timeout, …) — keep the status-based message
+            }
+            throw new StudyDownloadError(code, msg);
+        }
+
+        const blob = await res.blob();
+        const name = filenameFromDisposition(res.headers.get("Content-Disposition")) ?? "document";
+        const objectUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = objectUrl;
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        // Revoking immediately can cancel the save in some browsers; give the click a beat.
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
     }
 
     searchStudyFiles(params: {

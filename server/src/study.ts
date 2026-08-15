@@ -33,13 +33,18 @@ if (!fs.existsSync(OS_TEMP)) {
 const BASE_URL = Buffer.from("aHR0cHM6Ly93d3cuc3R1ZHlkcml2ZS5uZXQ=", "base64").toString("utf-8");
 const BASE = Buffer.from("c3R1ZHlkcml2ZQ==", "base64").toString("utf-8");
 
-const cachedFiles: { [url: string]: string } = {};
+interface CachedFile {
+    path: string;
+    filename: string;
+}
+
+const cachedFiles: { [url: string]: CachedFile } = {};
 // housekeeping
 setInterval(
     () => {
         const keys = Object.keys(cachedFiles);
         for (let key of keys) {
-            if (!fs.existsSync(cachedFiles[key])) {
+            if (!fs.existsSync(cachedFiles[key].path)) {
                 delete cachedFiles[key];
             }
         }
@@ -47,23 +52,89 @@ setInterval(
     1000 * 60 * 60,
 );
 
+// `code` is a stable machine-readable tag so the frontend can render a tailored message instead of
+// echoing raw backend prose.
+type UserErrorCode = "invalid_url" | "unavailable" | "unknown_type" | "upstream";
+
 class UserError extends Error {
-    constructor(message: string) {
+    code: UserErrorCode;
+
+    constructor(message: string, code: UserErrorCode = "unavailable") {
         super(message);
+        this.code = code;
     }
 }
 
 // The remote filename is untrusted and ends up both in the CDN URL and in a local path, so only a
-// plain alphanumeric suffix is accepted. Names without a dot ("Übungsblatt 0 - ... WiSe 2025/26")
-// would otherwise yield an "extension" containing a slash and point the write stream at a
-// directory that doesn't exist.
-function safeExtension(filename: string): string {
+// plain alphanumeric suffix is usable. Names without a dot ("Übungsblatt 0 - ... WiSe 2025/26")
+// would otherwise yield an "extension" containing a slash, pointing the write stream at a
+// directory that doesn't exist. Returns null when the name carries no usable extension.
+function extensionFromName(filename: string): string | null {
     const dot = filename.lastIndexOf(".");
     const ext = dot > 0 ? filename.slice(dot + 1) : "";
-    if (!/^[a-zA-Z0-9]{1,10}$/.test(ext)) {
-        throw new UserError("Unsupported file name, could not determine file type");
+    return /^[a-zA-Z0-9]{1,10}$/.test(ext) ? ext.toLowerCase() : null;
+}
+
+// Extensions worth probing when the filename doesn't carry one, most likely first. The CDN URL is
+// built from the extension, so there is no way to ask — we have to try. Ordered by what actually
+// shows up on StudyDrive (lecture notes and past exams are overwhelmingly PDFs).
+const GUESSED_EXTENSIONS = [
+    "pdf",
+    "docx",
+    "pptx",
+    "apkg", // Anki decks
+    "jpg",
+    "png",
+    "zip",
+    "xlsx",
+    "txt",
+];
+
+// Pause between extension probes. Only ever paid when we're guessing, and only between attempts —
+// a document whose filename has an extension still resolves in a single request.
+const GUESS_DELAY_MS = 750;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Ordered list of extensions to try for a document: the filename's own extension if it has one,
+// otherwise anything we can read out of the preview URL (it points at the same document id and
+// often keeps the original suffix), then the common-format guesses.
+function extensionCandidates(filename: string, previewUrl: string, docId: string): string[] {
+    const fromName = extensionFromName(filename);
+    if (fromName) {
+        return [fromName];
     }
-    return ext.toLowerCase();
+
+    const candidates: string[] = [];
+    const fromPreview = new RegExp(`${docId}\\.([a-zA-Z0-9]{1,10})`).exec(previewUrl);
+    if (fromPreview) {
+        candidates.push(fromPreview[1].toLowerCase());
+    }
+    for (const ext of GUESSED_EXTENSIONS) {
+        if (!candidates.includes(ext)) {
+            candidates.push(ext);
+        }
+    }
+    return candidates;
+}
+
+// Cache path for a document. docId comes from the last URL segment so it can't contain a slash,
+// but the extension is only ever one of our validated candidates — keep the containment check as a
+// backstop in case either assumption changes.
+function localPath(docId: string, ext: string): string {
+    const p = path.join(OS_TEMP, `${docId}.${ext}`);
+    if (!p.startsWith(OS_TEMP)) {
+        console.error("Invalid file path", p, docId, ext);
+        throw new UserError("Invalid local file path", "invalid_url");
+    }
+    return p;
+}
+
+// Name the user's browser should save the file under: the original name, with the resolved
+// extension appended when the name didn't carry one (which is exactly the case where we guessed).
+function downloadName(filename: string, ext: string): string {
+    const base = filename.trim() || "document";
+    return extensionFromName(base) ? base : `${base}.${ext}`;
 }
 
 // Bump the per-file download counter (how often a file was fetched through our site). Fire and
@@ -87,18 +158,18 @@ function incrementDownloadCount(studyId: string) {
         });
 }
 
-async function downloadStudyFunky(origUrl: string) {
+async function downloadStudyFunky(origUrl: string): Promise<CachedFile> {
     // extract id
     if (!origUrl.startsWith(BASE_URL)) {
-        throw new UserError("Invalid url, needs to start with " + BASE_URL);
+        throw new UserError("Invalid url, needs to start with " + BASE_URL, "invalid_url");
     }
     const docId = origUrl.split("/").pop()!.split("?")[0];
     if (!docId) {
-        throw new UserError("Invalid url, could not extract document ID");
+        throw new UserError("Invalid url, could not extract document ID", "invalid_url");
     }
 
     // check cache
-    if (cachedFiles[origUrl] && fs.existsSync(cachedFiles[origUrl])) {
+    if (cachedFiles[origUrl] && fs.existsSync(cachedFiles[origUrl].path)) {
         console.log("Loaded from cache");
         incrementDownloadCount(docId);
         return cachedFiles[origUrl];
@@ -118,43 +189,79 @@ async function downloadStudyFunky(origUrl: string) {
     const jResp = (await response.json()) as any;
 
     let data = jResp["data"];
-    if (!data.hasOwnProperty("filename") || !data.hasOwnProperty("file_preview")) {
-        throw new UserError("Failed to fetch file, missing data");
+    if (!data || !data.hasOwnProperty("filename") || !data.hasOwnProperty("file_preview")) {
+        throw new UserError("Failed to fetch file, missing data", "upstream");
     }
-    let name = data["filename"];
-    let ending = safeExtension(String(name ?? ""));
-    let preview = data["file_preview"];
+    let name = String(data["filename"] ?? "");
+    let preview = String(data["file_preview"] ?? "");
     let token = preview.split("token=").pop();
-    let dlUrl = `https://cdn.${BASE}.net/d/prod/documents/${docId}/original/${docId}.${ending}?token=${token}`;
+    const candidates = extensionCandidates(name, preview, docId);
 
-    const savePath = path.join(OS_TEMP, `${docId}.${ending}`);
-    if (!savePath.startsWith(OS_TEMP)) {
-        console.error("Invalid file path", savePath, name);
-        throw new UserError("Invalid local file path");
+    // A cached copy from an earlier guess wins over re-probing the CDN.
+    for (const ext of candidates) {
+        const existing = localPath(docId, ext);
+        if (fs.existsSync(existing)) {
+            console.log("File already exists");
+            incrementDownloadCount(docId);
+            const cached = { path: existing, filename: downloadName(name, ext) };
+            cachedFiles[origUrl] = cached;
+            return cached;
+        }
     }
 
-    if (fs.existsSync(savePath)) {
-        console.log("File already exists");
-        incrementDownloadCount(docId);
-        return savePath;
+    // Try each candidate extension until the CDN hands us the file. When the filename carried its
+    // own extension this is a single request; otherwise we walk the guesses, spaced out so a
+    // guessing run doesn't look like a burst of 404s from us.
+    let fileResponse: Awaited<ReturnType<typeof fetch>> | null = null;
+    let ending = "";
+    for (const [i, ext] of candidates.entries()) {
+        if (i > 0) {
+            await sleep(GUESS_DELAY_MS);
+        }
+        const dlUrl = `https://cdn.${BASE}.net/d/prod/documents/${docId}/original/${docId}.${ext}?token=${token}`;
+        const resp = await fetch(dlUrl, {
+            referrerPolicy: "strict-origin-when-cross-origin",
+            body: null,
+            method: "GET",
+            redirect: "follow",
+            headers: FETCH_HEADERS,
+        });
+        // While guessing, a 200 isn't enough: a miss may come back as an HTML or JSON error page,
+        // which we'd otherwise save and hand to the user as their "document".
+        const type = resp.headers.get("content-type") ?? "";
+        const looksLikeAnErrorPage =
+            candidates.length > 1 && /^(text\/html|application\/json)/i.test(type);
+        if (resp.ok && resp.body && !looksLikeAnErrorPage) {
+            fileResponse = resp;
+            ending = ext;
+            break;
+        }
+        // Drain the rejected body so the socket can be reused instead of leaking.
+        resp.body?.resume();
+        if (candidates.length > 1) {
+            console.log(
+                `Extension guess .${ext} rejected (${resp.status}, ${type || "no type"}) for ${docId}`,
+            );
+        }
     }
 
-    const fileResponse = await fetch(dlUrl, {
-        referrerPolicy: "strict-origin-when-cross-origin",
-        body: null,
-        method: "GET",
-        redirect: "follow",
-        headers: FETCH_HEADERS,
-    });
-    if (!fileResponse.ok || !fileResponse.body) {
-        throw new UserError(`Failed to fetch file, upstream returned ${fileResponse.status}`);
+    if (!fileResponse) {
+        if (candidates.length > 1) {
+            throw new UserError(
+                "Could not determine the file type — this document has no file extension and " +
+                    `none of the common formats (${GUESSED_EXTENSIONS.join(", ")}) matched`,
+                "unknown_type",
+            );
+        }
+        throw new UserError("The document could not be fetched from StudyDrive", "upstream");
     }
 
+    const savePath = localPath(docId, ending);
     // stream save file. pipeline() propagates stream errors as a rejection — a raw pipe() would
     // emit an unhandled 'error' event and take the whole process down.
     console.log("Downloading file...");
     try {
-        await streamPipeline(fileResponse.body, fs.createWriteStream(savePath));
+        await streamPipeline(fileResponse.body!, fs.createWriteStream(savePath));
     } catch (err) {
         // don't leave a half-written file behind for the cache/existsSync checks to trip over
         await fsPromises.rm(savePath, { force: true }).catch(() => {});
@@ -163,7 +270,8 @@ async function downloadStudyFunky(origUrl: string) {
     console.log("Downloaded file to", savePath);
 
     // cache
-    cachedFiles[origUrl] = savePath;
+    const result: CachedFile = { path: savePath, filename: downloadName(name, ending) };
+    cachedFiles[origUrl] = result;
 
     // add to database
     let conn: PoolConnection;
@@ -181,7 +289,7 @@ async function downloadStudyFunky(origUrl: string) {
                     data["file_type"] ?? -1,
                     data["university_name"] ?? "",
                     data["professor_name"] ?? "",
-                    data["semester"]["name"] ?? "",
+                    data["semester"]?.["name"] ?? "",
                     JSON.stringify(data),
                     1,
                 ],
@@ -195,7 +303,7 @@ async function downloadStudyFunky(origUrl: string) {
             if (conn) conn.end();
         });
 
-    return savePath;
+    return result;
 }
 
 let valid_ip_ranges: string[] = [];
@@ -407,27 +515,38 @@ export async function inspectStudyFile(req: Request, res: Response) {
 }
 
 export async function downloadStreamFile(req: Request, res: Response) {
-    if (!isAachener(req, res)) {
-        res.status(403).send({ error: true, msg: "Invalid IP" });
+    if (!(await isAachener(req, res))) {
+        res.status(403).send({ error: true, code: "not_aachen", msg: "Invalid IP" });
         return;
     }
 
     const url = req.query.url as string;
     if (!url) {
-        res.status(400).send({ error: true, msg: "Missing url" });
+        res.status(400).send({ error: true, code: "invalid_url", msg: "Missing url" });
         return;
     }
 
     try {
-        const filePath = await downloadStudyFunky(url);
-        res.sendFile(filePath);
+        const file = await downloadStudyFunky(url);
+        // Without this the browser names the download after the route ("study"). Both forms are
+        // sent: a plain ASCII fallback and the RFC 5987 encoding that keeps umlauts intact.
+        const ascii = file.filename.replace(/[^a-zA-Z0-9._-]/g, "_");
+        res.setHeader(
+            "Content-Disposition",
+            `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(file.filename)}`,
+        );
+        res.sendFile(file.path);
     } catch (err) {
         if (err instanceof UserError) {
-            res.status(400).send({ error: true, msg: "Failed to download file: " + err.message });
+            res.status(400).send({ error: true, code: err.code, msg: err.message });
             return;
         }
         console.error(err);
-        res.status(500).send({ error: true, msg: "Failed to download file" });
+        res.status(500).send({
+            error: true,
+            code: "internal",
+            msg: "Something went wrong while fetching this file",
+        });
     }
 }
 

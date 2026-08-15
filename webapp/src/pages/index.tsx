@@ -1,6 +1,7 @@
 import {
     GymInterpLineResponse,
     GymResponse,
+    StudyDownloadError,
     StudyFileResult,
     StudyInspectResponse,
 } from "@/api/Backend";
@@ -636,9 +637,68 @@ function GymStuff() {
     );
 }
 
+// Per-error-code guidance. The backend's `msg` says what went wrong; this says what the user can do
+// about it, which the raw message can't (it doesn't know it's being read by a person on a webpage).
+const STUDY_ERROR_HINTS: { [code: string]: string } = {
+    unknown_type:
+        "StudyDrive doesn't tell us the file type for this document. You can still download it " +
+        "directly from StudyDrive.",
+    upstream:
+        "StudyDrive didn't hand over this document — it may have been deleted or made private.",
+    invalid_url: "Paste the full document link, e.g. https://www.studydrive.net/document/1234567.",
+    not_aachen: "Downloads only work from inside the RWTH network.",
+    network: "Check your connection and try again.",
+    internal: "This one is on us — try again in a moment.",
+};
+
+function StudyDownloadAlert({
+    error,
+    onDismiss,
+}: {
+    error: StudyDownloadError;
+    onDismiss: () => void;
+}) {
+    const hint = STUDY_ERROR_HINTS[error.code];
+    return (
+        <div className="alert alert-warning alert-dismissible d-flex gap-2 align-items-start">
+            <div>
+                <strong>Download failed.</strong> {error.message}
+                {hint && <div className="small mt-1">{hint}</div>}
+            </div>
+            <button type="button" className="btn-close" aria-label="Dismiss" onClick={onDismiss} />
+        </div>
+    );
+}
+
+// Shared download handling for both study cards: tracks which document is in flight (so the button
+// can show a spinner) and keeps the failure around to render, instead of letting the browser save
+// the error response as a file.
+function useStudyDownload() {
+    const api = useBackendContext();
+    const [pending, setPending] = useState<string | null>(null);
+    const [error, setError] = useState<StudyDownloadError | null>(null);
+
+    const download = (url: string) => {
+        setError(null);
+        setPending(url);
+        api.downloadStudyFile(url)
+            .catch((e) => {
+                setError(
+                    e instanceof StudyDownloadError
+                        ? e
+                        : new StudyDownloadError("internal", String(e?.message ?? e)),
+                );
+            })
+            .finally(() => setPending(null));
+    };
+
+    return { download, pending, error, clearError: () => setError(null) };
+}
+
 function StudyStuff() {
     const api = useBackendContext();
     const [aachener, setIsAachener] = useState<boolean>();
+    const { download, pending, error, clearError } = useStudyDownload();
 
     useEffect(() => {
         api.isAachener().then(setIsAachener);
@@ -657,14 +717,15 @@ function StudyStuff() {
 
     const onSubmit = (e: React.SubmitEvent<HTMLFormElement>) => {
         e.preventDefault();
-        const url = (e.currentTarget.querySelector("#studyUrl") as HTMLInputElement).value;
-        window.open(api.getStudyUrl(url), "_blank");
+        const url = (e.currentTarget.querySelector("#studyUrl") as HTMLInputElement).value.trim();
+        if (url) download(url);
     };
 
     return (
         <div className="card mt-3">
             <div className="card-header">Study stuff</div>
             <div className="card-body">
+                {error && <StudyDownloadAlert error={error} onDismiss={clearError} />}
                 <form onSubmit={onSubmit}>
                     <div className="mb-3">
                         <label htmlFor="studyUrl" className="form-label">
@@ -677,8 +738,11 @@ function StudyStuff() {
                             placeholder="https://www.studydrive.net/document/1234"
                         />
                     </div>
-                    <button type="submit" className="btn btn-primary">
-                        Download
+                    <button type="submit" className="btn btn-primary" disabled={pending !== null}>
+                        {pending !== null && (
+                            <span className="spinner-border spinner-border-sm me-2"></span>
+                        )}
+                        {pending !== null ? "Fetching…" : "Download"}
                     </button>
                 </form>
             </div>
@@ -723,10 +787,16 @@ function formatStudyDate(v: string | null | undefined): string {
 function StudyInspect({
     data,
     onDownload,
+    downloading,
+    error,
+    onDismissError,
     onClose,
 }: {
     data: StudyInspectResponse;
     onDownload: (url: string) => void;
+    downloading: boolean;
+    error: StudyDownloadError | null;
+    onDismissError: () => void;
     onClose: () => void;
 }) {
     const { file, metadata } = data;
@@ -767,6 +837,10 @@ function StudyInspect({
                             ></button>
                         </div>
                         <div className="modal-body">
+                            {/* Repeated here because the card's own alert sits behind the backdrop. */}
+                            {error && (
+                                <StudyDownloadAlert error={error} onDismiss={onDismissError} />
+                            )}
                             {!metadata && (
                                 <div className="alert alert-secondary py-2">
                                     No extended metadata stored for this file.
@@ -784,9 +858,13 @@ function StudyInspect({
                         <div className="modal-footer">
                             <button
                                 className="btn btn-primary"
+                                disabled={downloading}
                                 onClick={() => onDownload(file.downloadUrl)}
                             >
-                                Download
+                                {downloading && (
+                                    <span className="spinner-border spinner-border-sm me-2"></span>
+                                )}
+                                {downloading ? "Fetching…" : "Download"}
                             </button>
                             <button className="btn btn-secondary" onClick={onClose}>
                                 Close
@@ -811,6 +889,12 @@ function StudySearch() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [inspect, setInspect] = useState<StudyInspectResponse | null>(null);
+    const {
+        download,
+        pending,
+        error: downloadError,
+        clearError: clearDownloadError,
+    } = useStudyDownload();
 
     useEffect(() => {
         api.isAachener().then(setIsAachener);
@@ -837,10 +921,6 @@ function StudySearch() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [api, aachener, q, sort]);
 
-    const onDownload = (url: string) => {
-        window.open(api.getStudyUrl(url), "_blank");
-    };
-
     if (aachener === undefined || aachener === false) {
         // Access gate is already shown by the StudyStuff card above; render nothing here.
         return null;
@@ -852,6 +932,9 @@ function StudySearch() {
                 <div className="card-header">Browse downloaded files</div>
                 <div className="card-body">
                     {error && <div className="alert alert-danger">{error}</div>}
+                    {downloadError && (
+                        <StudyDownloadAlert error={downloadError} onDismiss={clearDownloadError} />
+                    )}
                     <div className="d-flex flex-wrap gap-2 mb-3 align-items-center">
                         <div className="input-group" style={{ maxWidth: "420px" }}>
                             <span className="input-group-text">Search</span>
@@ -915,9 +998,14 @@ function StudySearch() {
                                                 <div className="btn-group btn-group-sm">
                                                     <button
                                                         className="btn btn-outline-primary"
-                                                        onClick={() => onDownload(r.downloadUrl)}
+                                                        disabled={pending !== null}
+                                                        onClick={() => download(r.downloadUrl)}
                                                     >
-                                                        Download
+                                                        {pending === r.downloadUrl ? (
+                                                            <span className="spinner-border spinner-border-sm"></span>
+                                                        ) : (
+                                                            "Download"
+                                                        )}
                                                     </button>
                                                     <button
                                                         className="btn btn-outline-secondary"
@@ -964,7 +1052,10 @@ function StudySearch() {
             {inspect && (
                 <StudyInspect
                     data={inspect}
-                    onDownload={onDownload}
+                    onDownload={download}
+                    downloading={pending !== null}
+                    error={downloadError}
+                    onDismissError={clearDownloadError}
                     onClose={() => setInspect(null)}
                 />
             )}
