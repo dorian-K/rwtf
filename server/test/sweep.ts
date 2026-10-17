@@ -2,6 +2,7 @@
 // prediction.ts) against the as-of backtest. Every prediction is causal (past + today-so-far only),
 // so MAE over the replay is already an out-of-sample forecast score -- no train/test split needed.
 
+import { writeFileSync } from "node:fs";
 import pool from "../src/db.js";
 import { buildFullWeek, predictLine, FullWeek, DayWindow, PredictedPoint } from "../src/prediction.js";
 
@@ -10,6 +11,9 @@ const NUM_WEEKS = 120;
 const CUTOFF_HOURS = (process.env.CUTOFFS ?? "8,11,14,17,20").split(",").map(Number);
 const MIN_DAY_POINTS = 100;
 const SUBSAMPLE = Number(process.env.SUBSAMPLE ?? 4); // every Nth usable day
+// DUMP=path writes every scored point as JSON lines, so other forecasters (ai/timestral_eval.py) can
+// be scored on exactly the same (day, cutoff, target-time) grid as this predictor.
+const DUMP = process.env.DUMP;
 
 interface Piece { value: number; created_at: Date; }
 const dayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
@@ -63,6 +67,7 @@ async function main() {
     const days = evalDays.filter((d) => d >= fu).filter((_, i) => i % SUBSAMPLE === 0);
 
     let absErr = 0, n = 0, cov50 = 0, cov90 = 0;
+    const dump: string[] = [];
     for (const D of days) {
         const f = interp(dayMap.get(dayKey(D))!);
         for (const H of CUTOFF_HOURS) {
@@ -76,6 +81,10 @@ async function main() {
                 absErr += Math.abs(p.value - a); n++;
                 if (a >= p.lower && a <= p.upper) cov50++;
                 if (a >= p.lowerWide && a <= p.upperWide) cov90++;
+                if (DUMP) dump.push(JSON.stringify({
+                    day: D.getTime(), cutoff: cutoff.getTime(), t, actual: a, pred: p.value,
+                    lower: p.lower, upper: p.upper, lowerWide: p.lowerWide, upperWide: p.upperWide,
+                }));
             }
         }
     }
@@ -85,6 +94,7 @@ async function main() {
         `TAIL=${process.env.MATCH_TAIL ?? 3} RANK=${process.env.RANK_DECAY ?? 3}`;
     console.log(`${cfg} | MAE=${(absErr / n).toFixed(3)} cov50=${((cov50 / n) * 100).toFixed(1)}% ` +
         `cov90=${((cov90 / n) * 100).toFixed(1)}% n=${n}`);
+    if (DUMP) writeFileSync(DUMP, dump.join("\n") + "\n");
     await pool.end();
 }
 main().catch((e) => { console.error(e); process.exit(1); });
