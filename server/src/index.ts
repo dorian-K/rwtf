@@ -11,8 +11,16 @@ import {
     predictLine,
     DayWindow,
     FULL_DAY,
+    PredictedPoint,
     getCurrentDayData,
 } from "./prediction.js";
+import {
+    getTimestralForecast,
+    MAX_DAY_OFFSET,
+    refreshTimestral,
+    timestralEnabled,
+    timestralLine,
+} from "./timestral.js";
 
 // The gym is only open ~06:00–24:00, so its predictions cover that window. WiFi uses the full day.
 const GYM_WINDOW: DayWindow = { startHour: 6, endHour: 24 };
@@ -44,7 +52,7 @@ const port = 4000;
 async function saveAuslastung(auslastung: number) {
     let conn: PoolConnection;
 
-    getConnection()
+    return getConnection()
         .then((c) => {
             conn = c;
             return conn.query("INSERT INTO rwth_gym (auslastung) VALUES (?)", [auslastung]);
@@ -63,6 +71,7 @@ async function gymCrawl() {
         .then((num) => {
             return saveAuslastung(num);
         })
+        .then(refreshTimestral)
         .catch((err) => {
             console.error(err);
         });
@@ -132,12 +141,67 @@ app.get("/api/v1/gym", async (req, res) => {
         if (conn) conn.end();
     }
 });
+// The similar-weeks prediction for day `dayoffset`, from up to ~120 weeks of gym history.
+async function similarWeeksLine(
+    conn: PoolConnection,
+    dayoffset: number,
+): Promise<PredictedPoint[]> {
+    const NUM_WEEKS = 120; // 2 years and a bit
+    const targetDate = new Date();
+    targetDate.setDate(targetDate.getDate() + dayoffset);
+    const currentDayOfWeek = targetDate.getDay();
+
+    let weeks: FullWeek[] = [];
+    for (let i = 0; i <= NUM_WEEKS; i++) {
+        const weekDate = new Date(targetDate);
+        weekDate.setDate(weekDate.getDate() - i * 7);
+
+        const startDate = new Date(weekDate);
+        startDate.setDate(startDate.getDate() - currentDayOfWeek);
+        startDate.setHours(0, 0, 0, 0);
+
+        const endDate = new Date(weekDate);
+        endDate.setDate(endDate.getDate() + (6 - currentDayOfWeek));
+        endDate.setHours(23, 59, 59, 999);
+
+        const rows = await conn.query(
+            "SELECT auslastung, created_at FROM rwth_gym WHERE created_at >= ? AND created_at <= ? LIMIT 3500",
+            [startDate, endDate],
+        );
+
+        if (i > 60 && rows.length < 20) {
+            break; // very little data
+        }
+
+        // Adapt the gym's `auslastung` field to the engine's neutral `value` field.
+        const sanitized = rows.map((row: any) => {
+            return {
+                value: row.auslastung,
+                created_at: row.created_at,
+            };
+        });
+        weeks.push(buildFullWeek(sanitized, i <= 4 ? 3 : 1));
+    }
+
+    return predictLine(weeks, currentDayOfWeek, GYM_WINDOW);
+}
+
 app.get("/api/v1/gym_interpline", async (req, res) => {
     // get offset from query
     let dayoffset = req.query.dayoffset ? parseInt(req.query.dayoffset as string) : 0;
 
-    if (dayoffset < 0 || dayoffset > 6 || isNaN(dayoffset)) {
+    if (dayoffset < 0 || dayoffset > MAX_DAY_OFFSET || isNaN(dayoffset)) {
         res.status(400).send('{error: true, msg: "Invalid dayoffset"}');
+        return;
+    }
+    // "closest" (similar weeks, default) or "timestral" (foundation-model forecast, see timestral.ts)
+    const method = req.query.method ?? "closest";
+    if (method !== "closest" && method !== "timestral") {
+        res.status(400).send('{error: true, msg: "Invalid method"}');
+        return;
+    }
+    if (method === "timestral" && !timestralEnabled()) {
+        res.status(503).send('{error: true, msg: "Timestral is not available"}');
         return;
     }
 
@@ -147,44 +211,18 @@ app.get("/api/v1/gym_interpline", async (req, res) => {
         let startTime = new Date();
         let response: any;
 
-        const NUM_WEEKS = 120; // 2 years and a bit
-        const targetDate = new Date();
-        targetDate.setDate(targetDate.getDate() + dayoffset);
-        const currentDayOfWeek = targetDate.getDay();
-
-        let weeks: FullWeek[] = [];
-        for (let i = 0; i <= NUM_WEEKS; i++) {
-            const weekDate = new Date(targetDate);
-            weekDate.setDate(weekDate.getDate() - i * 7);
-
-            const startDate = new Date(weekDate);
-            startDate.setDate(startDate.getDate() - currentDayOfWeek);
-            startDate.setHours(0, 0, 0, 0);
-
-            const endDate = new Date(weekDate);
-            endDate.setDate(endDate.getDate() + (6 - currentDayOfWeek));
-            endDate.setHours(23, 59, 59, 999);
-
-            const rows = await conn.query(
-                "SELECT auslastung, created_at FROM rwth_gym WHERE created_at >= ? AND created_at <= ? LIMIT 3500",
-                [startDate, endDate],
-            );
-
-            if (i > 60 && rows.length < 20) {
-                break; // very little data
+        let predicted: PredictedPoint[];
+        if (method === "timestral") {
+            try {
+                predicted = timestralLine(await getTimestralForecast(), dayoffset, GYM_WINDOW);
+            } catch (err: any) {
+                console.error("timestral forecast failed:", err.message);
+                res.status(503).send('{error: true, msg: "Timestral forecast unavailable"}');
+                return;
             }
-
-            // Adapt the gym's `auslastung` field to the engine's neutral `value` field.
-            const sanitized = rows.map((row: any) => {
-                return {
-                    value: row.auslastung,
-                    created_at: row.created_at,
-                };
-            });
-            weeks.push(buildFullWeek(sanitized, i <= 4 ? 3 : 1));
+        } else {
+            predicted = await similarWeeksLine(conn, dayoffset);
         }
-
-        const predicted = predictLine(weeks, currentDayOfWeek, GYM_WINDOW);
         // Map back to the gym's wire format (`auslastung`), carrying both confidence bands.
         const interpLine = predicted.map((p) => ({
             auslastung: p.value,

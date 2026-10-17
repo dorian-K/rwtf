@@ -14,6 +14,9 @@ export interface GymResponse {
     data_historic: GymDataPiece[][];
 }
 
+// "closest" = similar-weeks predictor, "timestral" = Mistral's Timestral foundation model.
+export type GymPredictionMethod = "closest" | "timestral";
+
 export interface GymInterpLineResponse {
     interpLine: GymDataPiece[];
     allTimeHigh: number;
@@ -185,8 +188,13 @@ export class Backend {
         return this.processResponse(this.fetch("/api/v1/gym?dayoffset=" + dayoffset));
     }
 
-    getGymInterpLine(dayoffset: number): Promise<GymInterpLineResponse> {
-        return this.processResponse(this.fetch("/api/v1/gym_interpline?dayoffset=" + dayoffset));
+    getGymInterpLine(
+        dayoffset: number,
+        method: GymPredictionMethod = "closest",
+    ): Promise<GymInterpLineResponse> {
+        return this.processResponse(
+            this.fetch(`/api/v1/gym_interpline?dayoffset=${dayoffset}&method=${method}`),
+        );
     }
 
     isAachener(): Promise<boolean> {

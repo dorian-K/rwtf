@@ -1,5 +1,6 @@
 import {
     GymInterpLineResponse,
+    GymPredictionMethod,
     GymResponse,
     StudyDownloadError,
     StudyFileResult,
@@ -32,8 +33,22 @@ const GYM_HISTORIC_COLORS = [
     "#E2C044",
 ];
 
-function ChartImpl({ gym, gymLine }: { gym: GymResponse; gymLine: GymInterpLineResponse }) {
-    const methodName = "Similar Weeks";
+const METHOD_NAMES: Record<GymPredictionMethod, string> = {
+    closest: "Similar Weeks",
+    timestral: "Timestral",
+};
+const METHOD_STORAGE_KEY = "gymPredictionMethod";
+
+function ChartImpl({
+    gym,
+    gymLine,
+    method,
+}: {
+    gym: GymResponse;
+    gymLine: GymInterpLineResponse;
+    method: GymPredictionMethod;
+}) {
+    const methodName = METHOD_NAMES[method];
     let todayReference;
     if (gym.data_today.length > 0) {
         todayReference = new Date(gym.data_today[0].created_at);
@@ -304,14 +319,46 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
 
     const days = ["Today", "Tomorrow", "+2 days", "+3 days"];
     const [dayoffset, setDayoffset] = useState(0);
+    // The method the shown gymLine was fetched with, so the legend never mislabels a stale line.
+    const [method, setMethod] = useState<GymPredictionMethod>("closest");
+    const [lineMethod, setLineMethod] = useState<GymPredictionMethod>("closest");
     const api = useBackendContext();
+
+    // Restore the visitor's last choice (static export: localStorage is only available client-side).
+    useEffect(() => {
+        try {
+            const saved = localStorage.getItem(METHOD_STORAGE_KEY);
+            if (saved === "closest" || saved === "timestral") setMethod(saved);
+        } catch {
+            // storage blocked (private mode, embeds): keep the default
+        }
+    }, []);
+
+    const chooseMethod = (m: GymPredictionMethod) => {
+        setMethod(m);
+        try {
+            localStorage.setItem(METHOD_STORAGE_KEY, m);
+        } catch {
+            // not persisted; the choice still applies for this visit
+        }
+    };
 
     const reloadData = () => {
         setIsLoading(true);
-        const prom = Promise.all([api.getGym(dayoffset), api.getGymInterpLine(dayoffset)]);
+        const requested = method;
+        const prom = Promise.all([
+            api.getGym(dayoffset),
+            api.getGymInterpLine(dayoffset, requested).catch((err) => {
+                // The model runs in a separate service that may be down; say so plainly.
+                throw requested === "timestral"
+                    ? 'The Timestral forecast is unavailable right now. Try "Similar Weeks".'
+                    : err;
+            }),
+        ]);
         prom.then((res) => {
             setGym(res[0]);
             setGymLine(res[1]);
+            setLineMethod(requested);
             setError(undefined);
         })
             .catch((err) => {
@@ -338,13 +385,13 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
             clearInterval(tim);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [api, dayoffset]);
+    }, [api, dayoffset, method]);
 
     return (
         <>
             {error && <div className="alert alert-danger">{error}</div>}
             <div style={{ height: "500px" }}>
-                {gym && gymLine && <ChartImpl gym={gym} gymLine={gymLine} />}
+                {gym && gymLine && <ChartImpl gym={gym} gymLine={gymLine} method={lineMethod} />}
             </div>
 
             {hideHandles === false && (
@@ -367,6 +414,25 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
                                 onClick={() => setDayoffset(index)}
                             >
                                 {d}
+                            </button>
+                        ))}
+                    </div>
+                    <div className="btn-group" role="group" aria-label="Prediction method">
+                        {(Object.keys(METHOD_NAMES) as GymPredictionMethod[]).map((m) => (
+                            <button
+                                key={m}
+                                type="button"
+                                className={`btn btn-outline-secondary ${
+                                    method === m ? "active" : ""
+                                }`}
+                                onClick={() => chooseMethod(m)}
+                                title={
+                                    m === "timestral"
+                                        ? "Forecast by Mistral's Timestral-209M time-series model"
+                                        : "Average of the most similar past days"
+                                }
+                            >
+                                {METHOD_NAMES[m]}
                             </button>
                         ))}
                     </div>

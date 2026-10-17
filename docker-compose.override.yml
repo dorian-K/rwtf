@@ -20,6 +20,9 @@ services:
     user: 1000:1000
     networks:
       - rwtf_network
+  timestral:
+    networks:
+      - rwtf_network
 
 networks:
   rwtf_network:
