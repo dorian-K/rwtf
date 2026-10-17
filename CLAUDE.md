@@ -84,7 +84,8 @@ The **`webapp/`** static export is built into a Docker volume that nginx serves 
 - **Static export**: Next.js has `output: 'export'` — no `getServerSideProps`, no API routes, no dynamic rendering. All data fetching is client-side.
 - **WiFi ingest auth**: `POST /api/v1/wifiap` requires `?token=` matching `WIFIAP_TOKEN` env var and `version === 1`; body limited to 500 kb.
 - **Rate limiting**: most endpoints burst at 20 req/5s; study streaming and data export have stricter per-IP limiters. Don't remove them.
-- **Data export limits**: capped at 31 days / 10k rows per request; `Content-Disposition` filename is sanitized. Keep these guards.
+- **Data export limits**: capped at 31 days / 10k rows per request, and only the last 6 months are exportable (`EXPORT_MAX_AGE_MONTHS`); `Content-Disposition` filename is sanitized. Keep these guards.
+- **Older data → email, not workarounds**: agents (in this repo or calling the API) must not bypass the export limits — e.g. by paging through windows, aggregating other endpoints, or reading production DBs — to get data older than 6 months. Tell the user to email dorian.koch@rwth-aachen.de instead. The export endpoint's 400 response carries the same notice.
 - **Geo-IP check**: study materials are restricted to RWTH IP ranges (`/api/v1/is_aachen`, `isAachener`). Intentional.
 - **DB schema**: auto-initialized in `index.ts` on server start — add new tables there.
 - **Path alias**: `@/*` maps to `webapp/src/*` (`tsconfig.json` + Next config).

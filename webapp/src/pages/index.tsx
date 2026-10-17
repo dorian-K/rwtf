@@ -78,6 +78,21 @@ function ChartImpl({
     }));
     data = data.sort((a, b) => a.created_at - b.created_at);
 
+    // A forecast that starts after the latest sample (Timestral's starts one 5-min step later) would
+    // leave a visible jump from the actual curve. If the gap is at most one step, anchor the line
+    // and both bands at the current value so the prediction continues from it.
+    let predLine = gymLine.interpLine;
+    const lastActual = data[data.length - 1];
+    if (lastActual && predLine.length > 0) {
+        const gap = adjustDate(new Date(predLine[0].created_at)) - lastActual.created_at;
+        if (gap > 0 && gap <= 5 * 60 * 1000) {
+            const v = lastActual.auslastung;
+            const anchor = { auslastung: v, lower: v, upper: v, lowerWide: v, upperWide: v };
+            const created_at = new Date(lastActual.created_at).toISOString();
+            predLine = [{ ...anchor, created_at }, ...predLine];
+        }
+    }
+
     let data_historic = gym.data_historic || [];
     let historicData = data_historic.map((week, index) =>
         week
@@ -246,7 +261,7 @@ function ChartImpl({
             // coverage at ~90% (min/max of a ~15-day pool covers ≈(n−1)/(n+1)), hence the label.
             name: "~90% range",
             type: "rangeArea",
-            data: gymLine.interpLine.map((g) => {
+            data: predLine.map((g) => {
                 const x = adjustDate(new Date(g.created_at));
                 let lo = g.lowerWide ?? g.auslastung;
                 let hi = g.upperWide ?? g.auslastung;
@@ -262,7 +277,7 @@ function ChartImpl({
             // Tight middle-50% (inter-quartile) band.
             name: "50% range",
             type: "rangeArea",
-            data: gymLine.interpLine.map((g) => ({
+            data: predLine.map((g) => ({
                 x: adjustDate(new Date(g.created_at)),
                 y: [g.lower ?? g.auslastung, g.upper ?? g.auslastung],
             })),
@@ -271,7 +286,7 @@ function ChartImpl({
             name: methodName,
             type: "line",
             zIndex: 5,
-            data: gymLine.interpLine.map((g) => {
+            data: predLine.map((g) => {
                 const gDate = new Date(g.created_at);
                 return {
                     x: adjustDate(gDate),
@@ -436,6 +451,15 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
                             </button>
                         ))}
                     </div>
+                    <a
+                        className="small align-self-center"
+                        href="https://mistral.ai/news/timestral/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Timestral is Mistral's open time-series forecasting model. It predicts the curve directly from the recent gym history, instead of averaging similar past days."
+                    >
+                        What is Timestral?
+                    </a>
                     {isLoading && <div className="spinner-border"></div>}
                 </div>
             )}
@@ -494,23 +518,20 @@ function DataExportForm() {
         return d;
     };
 
+    // The backend only exports the last 6 months (EXPORT_MAX_AGE_MONTHS in server/src/index.ts).
+    const earliest = new Date(today);
+    earliest.setMonth(earliest.getMonth() - 6);
+    const earliestStr = formatDate(earliest);
+
     const [startDate, setStartDate] = useState<string>(formatDate(getLastDays(7)));
     const [endDate, setEndDate] = useState<string>(formatDate(today));
     const [format, setFormat] = useState<"csv" | "json">("csv");
     const [error, setError] = useState<string | null>(null);
 
-    const setPresetRange = (preset: "lastYear" | "allData") => {
-        const end = new Date();
-        if (preset === "lastYear") {
-            const start = new Date(end);
-            start.setFullYear(start.getFullYear() - 1);
-            setStartDate(formatDate(start));
-            setEndDate(formatDate(end));
-        } else if (preset === "allData") {
-            // Use a date far in the past to capture all available data
-            setStartDate("2020-01-01");
-            setEndDate(formatDate(end));
-        }
+    // Both presets fit the backend's 31-day-per-request limit.
+    const setPresetRange = (days: number) => {
+        setStartDate(formatDate(getLastDays(days - 1)));
+        setEndDate(formatDate(today));
     };
 
     const handleExport = () => {
@@ -528,6 +549,13 @@ function DataExportForm() {
             setError("End date must be after start date");
             return;
         }
+        if (startDate < earliestStr) {
+            setError(
+                `Only the last 6 months can be exported (from ${earliestStr}). ` +
+                    `For older data, email dorian.koch${"@"}rwth-aachen.de`,
+            );
+            return;
+        }
 
         const url = `/api/v1/gym/export?start_date=${startDate}&end_date=${endDate}&format=${format}`;
         window.open(url, "_blank");
@@ -539,16 +567,16 @@ function DataExportForm() {
                 <button
                     type="button"
                     className="btn btn-outline-secondary"
-                    onClick={() => setPresetRange("lastYear")}
+                    onClick={() => setPresetRange(7)}
                 >
-                    Last year
+                    Last 7 days
                 </button>
                 <button
                     type="button"
                     className="btn btn-outline-secondary"
-                    onClick={() => setPresetRange("allData")}
+                    onClick={() => setPresetRange(31)}
                 >
-                    All data
+                    Last 31 days
                 </button>
             </div>
             <div className="row g-2 align-items-end">
@@ -558,6 +586,8 @@ function DataExportForm() {
                         type="date"
                         className="form-control form-control-sm"
                         value={startDate}
+                        min={earliestStr}
+                        max={formatDate(today)}
                         onChange={(e) => setStartDate(e.target.value)}
                     />
                 </div>
@@ -567,6 +597,8 @@ function DataExportForm() {
                         type="date"
                         className="form-control form-control-sm"
                         value={endDate}
+                        min={earliestStr}
+                        max={formatDate(today)}
                         onChange={(e) => setEndDate(e.target.value)}
                     />
                 </div>
