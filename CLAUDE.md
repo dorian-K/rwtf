@@ -49,7 +49,7 @@ Docker Compose runs five services (see `docker-compose.yml`; `.debug.yml` overri
 - **`rwtf_nginx`** — reverse proxy. Routes `/api/*` → `server:4000`, `/embed_picture.png` → the screenshot volume, everything else → the static webapp volume (`nginx.conf` / `nginx.debug.conf`).
 - **`server/`** — Express.js API (port 4000). Crawls the gym page every 5 min (`gym_crawler.ts`, OCR via canvas/sharp), ingests WiFi AP uploads, serves REST endpoints, and auto-creates the DB schema on startup.
 - **`mariadb`** — data store.
-- **`timestral/`** — internal Python sidecar (port 8000, not routed by nginx) serving Mistral's Timestral-209M time-series model; the server calls it for the gym chart's "Timestral" prediction mode. Weights download on first start into the `timestral-cache` volume.
+- **`timestral/`** — internal Python sidecar (port 8000, not routed by nginx) serving Mistral's Timestral-209M time-series model; the server calls it for the gym chart's "Timestral" prediction — the default in the UI, which falls back to "Similar Weeks" (`closest`) when the sidecar fails. Weights download on first start into the `timestral-cache` volume.
 - **`screenshot/`** — Puppeteer service (cron-driven) that captures the gym booking page as the input to the OCR pipeline.
 
 The **`webapp/`** static export is built into a Docker volume that nginx serves — it is not a running service in production.
