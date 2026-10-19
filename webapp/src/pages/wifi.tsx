@@ -108,6 +108,7 @@ function WifiHistory({ building }: { building: string }) {
     };
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         loadData();
         const tim = setInterval(loadData, 1000 * 60 * 5);
         return () => clearInterval(tim);
@@ -293,6 +294,7 @@ function WifiPrediction({ building }: { building: string }) {
     };
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         loadData();
         const tim = setInterval(loadData, 1000 * 60 * 5);
         return () => clearInterval(tim);

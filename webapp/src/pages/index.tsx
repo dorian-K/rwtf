@@ -353,6 +353,7 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
     useEffect(() => {
         try {
             const saved = localStorage.getItem(METHOD_STORAGE_KEY);
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             if (saved === "closest" || saved === "timestral") setMethod(saved);
         } catch {
             // storage blocked (private mode, embeds): keep the default
