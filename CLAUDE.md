@@ -90,3 +90,8 @@ The **`webapp/`** static export is built into a Docker volume that nginx serves 
 - **DB schema**: auto-initialized in `index.ts` on server start — add new tables there.
 - **Path alias**: `@/*` maps to `webapp/src/*` (`tsconfig.json` + Next config).
 - **Code style**: 4-space indentation, 100-char line width (`.prettierrc` in both `webapp/` and `server/`).
+
+## Git
+
+- Always commit finished work without waiting to be asked.
+- Keep commit titles short and compact, in the existing `area: summary` style (e.g. `gym: ...`).
