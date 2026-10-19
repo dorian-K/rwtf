@@ -1,5 +1,5 @@
 # Dockerfile
-FROM node:20
+FROM node:lts
 
 # Install required dependencies for Puppeteer
 RUN apt-get update && apt-get install -y \

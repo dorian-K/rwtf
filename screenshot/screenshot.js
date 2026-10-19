@@ -18,7 +18,7 @@ async function takeScreenshot() {
             '--disable-gpu',
             '--window-size=900,530'
         ],
-        headless: 'new',
+        headless: true,
         defaultViewport: {
             width: 900,
             height: 530
