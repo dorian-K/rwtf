@@ -1,5 +1,5 @@
 import fetch from "node-fetch";
-import sharp from "sharp";
+import sharp, { type Sharp } from "sharp";
 import { createCanvas } from "canvas";
 
 interface ImagePart {
@@ -9,7 +9,7 @@ interface ImagePart {
 }
 
 // Function to get an up-to-date picture from a website
-async function getUptodatePic(): Promise<sharp.Sharp> {
+async function getUptodatePic(): Promise<Sharp> {
     const headers = {
         authority: "buchung.hsz.rwth-aachen.de",
         accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
@@ -39,7 +39,7 @@ async function getUptodatePic(): Promise<sharp.Sharp> {
 }
 
 // Function to split image into parts
-async function splitImg(img: sharp.Sharp): Promise<ImagePart[]> {
+async function splitImg(img: Sharp): Promise<ImagePart[]> {
     let metadata = await img.metadata();
     const width = metadata.width ?? 0;
     const height = metadata.height ?? 0;
@@ -118,7 +118,7 @@ async function splitImg(img: sharp.Sharp): Promise<ImagePart[]> {
 }
 
 // Function to make a synthetic digit
-function makeSyntheticDigit(character: string): sharp.Sharp {
+function makeSyntheticDigit(character: string): Sharp {
     const canvas = createCanvas(22, 30);
     const ctx = canvas.getContext("2d");
     ctx.fillStyle = "#FFFFFF";
@@ -133,8 +133,8 @@ function makeSyntheticDigit(character: string): sharp.Sharp {
 }
 
 // Function to get synthetic numbers
-function getNumbersSynthetic(): Record<number, sharp.Sharp> {
-    const list: Record<number, sharp.Sharp> = {};
+function getNumbersSynthetic(): Record<number, Sharp> {
+    const list: Record<number, Sharp> = {};
     for (let i = 0; i < 10; i++) {
         list[i] = makeSyntheticDigit(i.toString());
         // save to disk
@@ -143,9 +143,9 @@ function getNumbersSynthetic(): Record<number, sharp.Sharp> {
     return list;
 }
 
-/*async function readNumbersFromPics(): Promise<Record<number, sharp.Sharp>> {
+/*async function readNumbersFromPics(): Promise<Record<number, Sharp>> {
     const pics = getPicsFromFs();
-    const numbers: Record<number, sharp.Sharp> = {};
+    const numbers: Record<number, Sharp> = {};
 
     for (let i = 0; i < 10; i++) {
         for (const [key, image] of Object.entries(pics)) {
@@ -198,7 +198,7 @@ async function diffVal(im1Buffer: Buffer, im2Buffer: Buffer, num: string): Promi
 
 async function matchNumber(
     toBeMatchedBuffer: Buffer,
-    numberImages: Record<number, sharp.Sharp>,
+    numberImages: Record<number, Sharp>,
 ): Promise<[number, number]> {
     let minDiff = Infinity;
     let matchedNumber = 0;
@@ -219,7 +219,7 @@ async function matchNumber(
 }
 
 export async function getAuslastungAndMatchNumbers(
-    pic: sharp.Sharp,
+    pic: Sharp,
     debug = undefined as string | undefined,
 ): Promise<[number, number][]> {
     let auslastung = pic;

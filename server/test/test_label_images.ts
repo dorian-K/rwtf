@@ -1,10 +1,10 @@
-import sharp from "sharp";
+import sharp, { type Sharp } from "sharp";
 import fs from "fs";
 import path from "path";
 import { getAuslastungAndMatchNumbers } from "../src/gym_crawler.js";
 
-function getPicsFromFs(): Record<string, sharp.Sharp> {
-    const pics: Record<string, sharp.Sharp> = {};
+function getPicsFromFs(): Record<string, Sharp> {
+    const pics: Record<string, Sharp> = {};
     const dir = "./test_pics";
     fs.readdirSync(dir).forEach((filename) => {
         if (filename.endsWith(".gif")) {
