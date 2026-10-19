@@ -340,6 +340,8 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
     // The method the shown gymLine was fetched with, so the legend never mislabels a stale line.
     const [method, setMethod] = useState<GymPredictionMethod>(DEFAULT_METHOD);
     const [lineMethod, setLineMethod] = useState<GymPredictionMethod>(DEFAULT_METHOD);
+    // The method that line was requested with; differs from lineMethod after a fallback.
+    const [lineRequested, setLineRequested] = useState<GymPredictionMethod>(DEFAULT_METHOD);
     // Set when the requested method failed and the chart fell back to Similar Weeks.
     const [notice, setNotice] = useState<string>();
     // Only the latest request may update the chart; an older, slower one (e.g. the default method's,
@@ -358,6 +360,8 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
     }, []);
 
     const chooseMethod = (m: GymPredictionMethod) => {
+        // Re-picking the current method (e.g. Timestral after a fallback) retries it.
+        if (m === method) reloadData();
         setMethod(m);
         try {
             localStorage.setItem(METHOD_STORAGE_KEY, m);
@@ -391,6 +395,7 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
             setGym(g);
             setGymLine(l.line);
             setLineMethod(l.used);
+            setLineRequested(requested);
             setNotice(
                 l.used !== requested
                     ? "The Timestral forecast is unavailable right now, showing Similar Weeks instead."
@@ -409,6 +414,10 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
                 if (seq === requestSeq.current) setIsLoading(false);
             });
     };
+
+    // The selector shows the method actually on the chart (so a fallback is visible there too),
+    // except right after the visitor picks another one and its line is still loading.
+    const activeMethod = method === lineRequested ? lineMethod : method;
 
     useEffect(() => {
         reloadData();
@@ -465,7 +474,7 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
                                 key={m}
                                 type="button"
                                 className={`btn btn-outline-secondary ${
-                                    method === m ? "active" : ""
+                                    activeMethod === m ? "active" : ""
                                 }`}
                                 onClick={() => chooseMethod(m)}
                                 title={
