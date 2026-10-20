@@ -340,7 +340,7 @@ app.post("/api/v1/wifiap", limiterPost, express.json({ limit: "500kb" }), async 
                 // insert into wifi_data
             }
             await conn.commit();
-            console.log(`Added ${numAdded} wifi AP entries from uploader ${req.ip}`);
+            console.log(`Added ${numAdded} wifi AP entries`);
         } catch (err) {
             await conn.rollback();
             console.error(err);
@@ -592,7 +592,7 @@ app.get("/api/v1/gym/export", limiterExport, async (req, res) => {
         }
 
         console.log(
-            `Export: ${req.ip} downloaded ${exportRows.length} rows (format=${format}, range=${startDateStr} to ${endDateStr})`,
+            `Export: ${exportRows.length} rows (format=${format}, range=${startDateStr} to ${endDateStr})`,
         );
     } catch (err) {
         console.error(err);
