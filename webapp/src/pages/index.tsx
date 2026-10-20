@@ -329,13 +329,26 @@ function ChartImpl({
     );
 }
 
+// "Today", "Tomorrow", then weekday names for the remaining day tabs.
+function dayLabels(): string[] {
+    return [0, 1, 2, 3].map((offset) => {
+        if (offset === 0) return "Today";
+        if (offset === 1) return "Tomorrow";
+        const d = new Date();
+        d.setDate(d.getDate() + offset);
+        return d.toLocaleDateString("en-US", { weekday: "long" });
+    });
+}
+
 export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: boolean }) {
     const [gym, setGym] = useState<GymResponse>();
     const [gymLine, setGymLine] = useState<GymInterpLineResponse>();
     const [error, setError] = useState<string>();
     const [isLoading, setIsLoading] = useState(true);
 
-    const days = ["Today", "Tomorrow", "+2 days", "+3 days"];
+    // Weekday names depend on the visitor's clock, so the static export ships placeholders and
+    // reloadData fills in the real names (keeping them right across midnight).
+    const [days, setDays] = useState(["Today", "Tomorrow", "+2 days", "+3 days"]);
     const [dayoffset, setDayoffset] = useState(0);
     // The method the shown gymLine was fetched with, so the legend never mislabels a stale line.
     const [method, setMethod] = useState<GymPredictionMethod>(DEFAULT_METHOD);
@@ -371,6 +384,7 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
     };
 
     const reloadData = () => {
+        setDays(dayLabels());
         setIsLoading(true);
         const seq = ++requestSeq.current;
         const requested = method;
