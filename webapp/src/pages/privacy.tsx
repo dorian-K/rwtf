@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 // Keep in sync with what the code does: server/src/metrics.ts (usage counts), geoip.ts (Aachen
-// check), nginx.conf (access log), docker-compose.yml (log rotation), and the rate limiters in
+// check), nginx.conf + nginx-logs.sh (logs, 7-day retention), and the rate limiters in
 // server/src/index.ts.
 export default function PrivacyPage() {
     return (
@@ -26,8 +26,8 @@ export default function PrivacyPage() {
             </p>
             <ul>
                 <li>
-                    Server logs: shortened IP (e.g. 1.2.3.0), time, page, referrer, browser; rotated
-                    automatically.
+                    Server logs: IP (shortened, e.g. 1.2.3.0, except in error logs), time, page,
+                    referrer, browser; deleted after 7 days.
                 </li>
                 <li>Rate limiting: full IP, in memory only, for up to 6 hours.</li>
                 <li>

@@ -16,6 +16,8 @@ services:
       - webapp-content:/usr/share/nginx/html
       - ./nginx.conf:/etc/nginx/conf.d/default.conf
       - screenshot-data:/screenshot
+      - ./nginx-logs.sh:/nginx-logs.sh:ro
+    command: ["/bin/sh", "/nginx-logs.sh"]
     depends_on:
       server:
         restart: true
