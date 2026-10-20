@@ -1,13 +1,13 @@
 import {
-    GymInterpLineResponse,
-    GymPredictionMethod,
-    GymResponse,
+    type GymInterpLineResponse,
+    type GymPredictionMethod,
+    type GymResponse,
     StudyDownloadError,
-    StudyFileResult,
-    StudyInspectResponse,
+    type StudyFileResult,
+    type StudyInspectResponse,
 } from "@/api/Backend";
 import { useBackendContext } from "@/components/BackendProvider";
-import { ApexOptions } from "apexcharts";
+import type { ApexOptions } from "apexcharts";
 import React from "react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
@@ -52,7 +52,7 @@ function ChartImpl({
     method: GymPredictionMethod;
 }) {
     const methodName = METHOD_NAMES[method];
-    let todayReference;
+    let todayReference: Date;
     if (gym.data_today.length > 0) {
         todayReference = new Date(gym.data_today[0].created_at);
     } else if (
@@ -64,7 +64,7 @@ function ChartImpl({
         return <div>No data</div>;
     }
 
-    let adjustDate = (d: Date | string) => {
+    const adjustDate = (d: Date | string) => {
         if (typeof d === "string") {
             d = new Date(d);
         }
@@ -96,8 +96,8 @@ function ChartImpl({
         }
     }
 
-    let data_historic = gym.data_historic || [];
-    let historicData = data_historic.map((week, index) =>
+    const data_historic = gym.data_historic || [];
+    const historicData = data_historic.map((week) =>
         week
             .map((g) => ({
                 ...g,
@@ -106,8 +106,8 @@ function ChartImpl({
             .sort((a, b) => a.created_at - b.created_at),
     );
 
-    let minX = new Date(todayReference).setHours(6, 0, 0, 0);
-    let maxX = new Date(todayReference).setHours(23, 59, 59, 999);
+    const minX = new Date(todayReference).setHours(6, 0, 0, 0);
+    const maxX = new Date(todayReference).setHours(23, 59, 59, 999);
     const currentTimestamp = new Intl.DateTimeFormat("de-DE", {
         dateStyle: "medium",
         timeStyle: "short",
@@ -201,12 +201,12 @@ function ChartImpl({
         },
     };
 
-    let historicArrivals = [];
+    const historicArrivals = [];
     for (let i = 0; i < gymLine.interpLine.length; i++) {
         const g = gymLine.interpLine[i];
         let val = g.auslastung;
         let j = i - 1;
-        let minTime = adjustDate(new Date(g.created_at)) - 1000 * 60 * 60 * 1.5; // 1.5 hrs
+        const minTime = adjustDate(new Date(g.created_at)) - 1000 * 60 * 60 * 1.5; // 1.5 hrs
         while (j >= 0 && historicArrivals[j].created_at > minTime + 1000) {
             val -= Math.max(historicArrivals[j].arrival, 0);
             j--;
@@ -217,7 +217,7 @@ function ChartImpl({
         });
     }
     // smooth out the arrival data
-    let smoothedArrivals = [];
+    const smoothedArrivals = [];
     //smoothedArrivals.push(historicArrivals[0]);
     for (let i = 1; i < historicArrivals.length - 2; i++) {
         smoothedArrivals.push({
@@ -353,7 +353,6 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
     useEffect(() => {
         try {
             const saved = localStorage.getItem(METHOD_STORAGE_KEY);
-            // eslint-disable-next-line react-hooks/set-state-in-effect
             if (saved === "closest" || saved === "timestral") setMethod(saved);
         } catch {
             // storage blocked (private mode, embeds): keep the default
@@ -420,6 +419,7 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
     // except right after the visitor picks another one and its line is still loading.
     const activeMethod = method === lineRequested ? lineMethod : method;
 
+    // biome-ignore lint/correctness/useExhaustiveDependencies: rerun on the listed inputs only
     useEffect(() => {
         reloadData();
 
@@ -433,7 +433,6 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
         return () => {
             clearInterval(tim);
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [api, dayoffset, method]);
 
     return (
@@ -449,6 +448,7 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
             {hideHandles === false && (
                 <div className="d-flex mt-3 flex-wrap gap-2">
                     <button
+                        type="button"
                         className="btn btn-primary me-2"
                         onClick={reloadData}
                         disabled={isLoading}
@@ -458,7 +458,7 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
                     <div className="btn-group" role="group">
                         {days.map((d, index) => (
                             <button
-                                key={index}
+                                key={d}
                                 type="button"
                                 className={`btn btn-outline-secondary ${
                                     dayoffset === index ? "active" : ""
@@ -618,8 +618,11 @@ function DataExportForm() {
             </div>
             <div className="row g-2 align-items-end">
                 <div className="col-auto">
-                    <label className="form-label small mb-1">Start Date</label>
+                    <label className="form-label small mb-1" htmlFor="export-start">
+                        Start Date
+                    </label>
                     <input
+                        id="export-start"
                         type="date"
                         className="form-control form-control-sm"
                         value={startDate}
@@ -629,8 +632,11 @@ function DataExportForm() {
                     />
                 </div>
                 <div className="col-auto">
-                    <label className="form-label small mb-1">End Date</label>
+                    <label className="form-label small mb-1" htmlFor="export-end">
+                        End Date
+                    </label>
                     <input
+                        id="export-end"
                         type="date"
                         className="form-control form-control-sm"
                         value={endDate}
@@ -640,8 +646,11 @@ function DataExportForm() {
                     />
                 </div>
                 <div className="col-auto">
-                    <label className="form-label small mb-1">Format</label>
+                    <label className="form-label small mb-1" htmlFor="export-format">
+                        Format
+                    </label>
                     <select
+                        id="export-format"
                         className="form-select form-select-sm"
                         value={format}
                         onChange={(e) => setFormat(e.target.value as "csv" | "json")}
@@ -651,7 +660,7 @@ function DataExportForm() {
                     </select>
                 </div>
                 <div className="col-auto">
-                    <button className="btn btn-sm btn-primary" onClick={handleExport}>
+                    <button type="button" className="btn btn-sm btn-primary" onClick={handleExport}>
                         Download
                     </button>
                 </div>
@@ -672,7 +681,6 @@ function GymStuff() {
     }, [api]);
 
     useEffect(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setEmbedCode(EMBED_CODE(window.location.origin));
         setPicUrl(`${window.location.origin}/embed_picture.png`);
     }, []);
@@ -916,7 +924,7 @@ function formatStudyDate(v: string | null | undefined): string {
     } else {
         d = new Date(v);
     }
-    return isNaN(d.getTime()) ? String(v) : d.toLocaleDateString("de-DE");
+    return Number.isNaN(d.getTime()) ? String(v) : d.toLocaleDateString("de-DE");
 }
 
 function StudyInspect({
@@ -955,7 +963,9 @@ function StudyInspect({
 
     return (
         <>
+            {/* biome-ignore lint/a11y/useKeyWithClickEvents: backdrop click is a mouse shortcut; the Close buttons work by keyboard */}
             <div className="modal fade show d-block" tabIndex={-1} role="dialog" onClick={onClose}>
+                {/* biome-ignore lint/a11y/useKeyWithClickEvents: only keeps clicks off the backdrop */}
                 <div
                     className="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered"
                     role="document"
@@ -982,8 +992,8 @@ function StudyInspect({
                                 </div>
                             )}
                             <dl className="row mb-0">
-                                {rows.map((r, i) => (
-                                    <React.Fragment key={i}>
+                                {rows.map((r) => (
+                                    <React.Fragment key={r.label}>
                                         <dt className="col-sm-4 text-muted">{r.label}</dt>
                                         <dd className="col-sm-8 text-break">{r.value}</dd>
                                     </React.Fragment>
@@ -992,6 +1002,7 @@ function StudyInspect({
                         </div>
                         <div className="modal-footer">
                             <button
+                                type="button"
                                 className="btn btn-primary"
                                 disabled={downloading}
                                 onClick={() => onDownload(file.downloadUrl)}
@@ -1001,7 +1012,7 @@ function StudyInspect({
                                 )}
                                 {downloading ? "Fetching…" : "Download"}
                             </button>
-                            <button className="btn btn-secondary" onClick={onClose}>
+                            <button type="button" className="btn btn-secondary" onClick={onClose}>
                                 Close
                             </button>
                         </div>
@@ -1049,11 +1060,11 @@ function StudySearch() {
     };
 
     // Debounced search whenever the query or sort changes; always resets to page 1.
+    // biome-ignore lint/correctness/useExhaustiveDependencies: rerun on the listed inputs only
     useEffect(() => {
         if (!aachener) return;
         const tim = setTimeout(() => runSearch(1), 300);
         return () => clearTimeout(tim);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [api, aachener, q, sort]);
 
     if (aachener === undefined || aachener === false) {
@@ -1132,6 +1143,7 @@ function StudySearch() {
                                             <td className="text-nowrap">
                                                 <div className="btn-group btn-group-sm">
                                                     <button
+                                                        type="button"
                                                         className="btn btn-outline-primary"
                                                         disabled={pending !== null}
                                                         onClick={() => download(r.downloadUrl)}
@@ -1143,6 +1155,7 @@ function StudySearch() {
                                                         )}
                                                     </button>
                                                     <button
+                                                        type="button"
                                                         className="btn btn-outline-secondary"
                                                         onClick={() =>
                                                             api
@@ -1165,6 +1178,7 @@ function StudySearch() {
                     <div className="d-flex align-items-center gap-2">
                         <div className="btn-group btn-group-sm" role="group">
                             <button
+                                type="button"
                                 className="btn btn-outline-secondary"
                                 disabled={page === 1 || loading}
                                 onClick={() => runSearch(page - 1)}
@@ -1172,6 +1186,7 @@ function StudySearch() {
                                 ← Prev
                             </button>
                             <button
+                                type="button"
                                 className="btn btn-outline-secondary"
                                 disabled={!hasMore || loading}
                                 onClick={() => runSearch(page + 1)}

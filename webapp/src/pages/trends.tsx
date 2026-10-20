@@ -1,8 +1,9 @@
-import React, { useEffect, useState, Suspense, lazy } from "react";
+import type React from "react";
+import { useEffect, useState, Suspense, lazy } from "react";
 import Link from "next/link";
 import { useBackendContext } from "@/components/BackendProvider";
-import { ApexOptions } from "apexcharts";
-import {
+import type { ApexOptions } from "apexcharts";
+import type {
     MonthlyDataPoint,
     HourlyDataPoint,
     DayOfWeekDataPoint,
@@ -44,7 +45,7 @@ function monFirstToDayOfWeek(monFirstIndex: number): number {
 const heatmapColorInterpolator = interpolateHsl("#28a745", "#dc3545");
 
 function getHeatmapColor(value: number, maxValue: number): string {
-    if (maxValue <= 0 || value === null || value === undefined || isNaN(value)) {
+    if (maxValue <= 0 || value === null || value === undefined || Number.isNaN(value)) {
         return "#000000";
     }
 
@@ -546,6 +547,7 @@ function TrendsPage() {
                     &larr; Back to Live View
                 </Link>
                 <button
+                    type="button"
                     className="btn btn-outline-primary ms-2"
                     onClick={async () => {
                         await navigator.clipboard.writeText(window.location.href);

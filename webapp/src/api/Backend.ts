@@ -172,7 +172,7 @@ export class Backend {
             .then((res) => {
                 if (!res.ok) {
                     // Attempt to parse the response as json to check for api_error
-                    return res.json().then((errorBody) => {
+                    return res.json().then(() => {
                         throw new Error(`${res.statusText}, invalid error, url=${res.url}`);
                     });
                 }

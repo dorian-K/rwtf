@@ -27,7 +27,8 @@ The webapp is served on port **80** (nginx); open http://localhost/.
 ```bash
 npm run dev       # dev server
 npm run build     # static export to webapp/out/
-npm run lint      # ESLint (eslint .)
+npm run lint      # Biome lint + format check (biome check .)
+npm run format    # Biome autofix + format
 ```
 
 **Backend only (`server/`):**
@@ -36,6 +37,7 @@ npm run build              # tsc → dist/
 npm start                  # tsc + node dist/src/index.js (port 4000)
 npm run start-without-build
 npm run test               # runs OCR digit-labeling test (test/test_label_images.ts)
+npm run lint / format      # Biome, same as webapp
 ```
 
 **Android scanner (`RWTFWifiScanner/`):** Gradle project — `./gradlew build`, `./gradlew test`.
@@ -89,7 +91,7 @@ The **`webapp/`** static export is built into a Docker volume that nginx serves 
 - **Geo-IP check**: study materials are restricted to RWTH IP ranges (`/api/v1/is_aachen`, `isAachener`). Intentional.
 - **DB schema**: auto-initialized in `index.ts` on server start — add new tables there.
 - **Path alias**: `@/*` maps to `webapp/src/*` (`tsconfig.json` + Next config).
-- **Code style**: 4-space indentation, 100-char line width (`.prettierrc` in both `webapp/` and `server/`).
+- **Code style**: 4-space indentation, 100-char line width, enforced by Biome (root `biome.json`, shared by `webapp/` and `server/`; `webapp/biome.json` adds the React/Next rules). Suppress a rule inline with `// biome-ignore lint/<group>/<rule>: <reason>`.
 
 ## Git
 

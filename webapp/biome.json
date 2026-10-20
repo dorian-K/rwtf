@@ -1,0 +1,16 @@
+{
+    "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
+    "root": false,
+    "extends": "//",
+    "linter": {
+        "domains": {
+            "next": "recommended",
+            "react": "recommended"
+        },
+        "rules": {
+            "a11y": {
+                "useSemanticElements": "off"
+            }
+        }
+    }
+}

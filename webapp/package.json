@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "biome check .",
+    "format": "biome check --write ."
   },
   "dependencies": {
     "apexcharts": "^8.3.1",
@@ -19,15 +20,12 @@
     "sass": "^1.105.2"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.15",
     "@types/bootstrap": "^5.2.11",
     "@types/d3-interpolate": "^3.0.4",
     "@types/node": "^26.6.5",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "eslint": "^9.39.5",
-    "eslint-config-next": "^16.4.2",
-    "eslint-config-prettier": "^10.1.8",
-    "eslint-plugin-prettier": "^5.5.7",
-    "typescript": "^5.9.3"
+    "typescript": "^7.0.2"
   }
 }

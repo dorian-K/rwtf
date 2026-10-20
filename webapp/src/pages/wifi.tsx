@@ -1,8 +1,9 @@
-import React, { useEffect, useState, Suspense, lazy } from "react";
+import type React from "react";
+import { useEffect, useState, Suspense, lazy } from "react";
 import Link from "next/link";
 import { useBackendContext } from "@/components/BackendProvider";
-import { ApexOptions } from "apexcharts";
-import { WifiBuildingResponse, WifiBuildingPredictResponse } from "@/api/Backend";
+import type { ApexOptions } from "apexcharts";
+import type { WifiBuildingResponse, WifiBuildingPredictResponse } from "@/api/Backend";
 
 const ReactApexChart = lazy(() =>
     import("react-apexcharts").then((m) => ({
@@ -107,12 +108,11 @@ function WifiHistory({ building }: { building: string }) {
             .finally(() => setIsLoading(false));
     };
 
+    // biome-ignore lint/correctness/useExhaustiveDependencies: rerun on the listed inputs only
     useEffect(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         loadData();
         const tim = setInterval(loadData, 1000 * 60 * 5);
         return () => clearInterval(tim);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [api, building, hours]);
 
     const timeRanges: { label: string; value: number }[] = [
@@ -139,7 +139,12 @@ function WifiHistory({ building }: { building: string }) {
                             </button>
                         ))}
                     </div>
-                    <button className="btn btn-primary" onClick={loadData} disabled={isLoading}>
+                    <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={loadData}
+                        disabled={isLoading}
+                    >
                         Reload
                     </button>
                     {isLoading && <div className="spinner-border spinner-border-sm"></div>}
@@ -293,12 +298,11 @@ function WifiPrediction({ building }: { building: string }) {
             .finally(() => setIsLoading(false));
     };
 
+    // biome-ignore lint/correctness/useExhaustiveDependencies: rerun on the listed inputs only
     useEffect(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         loadData();
         const tim = setInterval(loadData, 1000 * 60 * 5);
         return () => clearInterval(tim);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [api, building]);
 
     const hasData = data && (data.dataToday.length > 0 || data.interpLine.length > 0);
@@ -309,7 +313,12 @@ function WifiPrediction({ building }: { building: string }) {
             <div className="card-body">
                 {error && <div className="alert alert-danger">{error}</div>}
                 <div className="d-flex flex-wrap gap-2 mb-3 align-items-center">
-                    <button className="btn btn-primary" onClick={loadData} disabled={isLoading}>
+                    <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={loadData}
+                        disabled={isLoading}
+                    >
                         Reload
                     </button>
                     {isLoading && <div className="spinner-border spinner-border-sm"></div>}
