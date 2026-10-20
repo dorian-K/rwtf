@@ -1,5 +1,13 @@
+# Rotate container logs instead of keeping them forever (~30 MB per service).
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   rwtf_nginx:
+    logging: *default-logging
     image: nginx:mainline-alpine
     pull_policy: always
     init: true
@@ -15,6 +23,7 @@ services:
         condition: service_started
 
   server:
+    logging: *default-logging
     build: server
     init: true
     restart: unless-stopped
@@ -31,6 +40,7 @@ services:
 
   # Timestral forecasting sidecar; only the server talks to it (no ports, not routed by nginx).
   timestral:
+    logging: *default-logging
     build: timestral
     init: true
     restart: unless-stopped
@@ -38,6 +48,7 @@ services:
       - timestral-cache:/cache
 
   mariadb:
+    logging: *default-logging
     image: mariadb
     pull_policy: always
     restart: unless-stopped
@@ -50,6 +61,7 @@ services:
     volumes:
       - ./mariadb-data:/var/lib/mysql
   screenshot:
+    logging: *default-logging
     build: screenshot
     init: true
     restart: unless-stopped
