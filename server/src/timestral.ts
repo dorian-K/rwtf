@@ -29,7 +29,7 @@ interface Forecast {
 }
 
 let cached: Forecast | undefined;
-let inflight: Promise<Forecast> | undefined;
+let inflight: { latestSample: number; horizonEnd: number; promise: Promise<Forecast> } | undefined;
 let lastFailure: { at: number; error: Error } | undefined;
 
 export const timestralEnabled = () => TIMESTRAL_URL !== undefined;
@@ -126,11 +126,20 @@ async function freshForecast(): Promise<Forecast> {
 
     const horizonEnd = currentHorizonEnd();
     if (cached?.latestSample === latestSample && cached.horizonEnd === horizonEnd) return cached;
-    if (inflight) return inflight;
+    if (inflight) {
+        if (inflight.latestSample === latestSample && inflight.horizonEnd === horizonEnd) {
+            return inflight.promise;
+        }
+        // Still computing for an older sample: returning that would give a forecast that starts
+        // before the newest sample. Wait for it (the sidecar runs one forecast at a time anyway),
+        // then forecast from the newest sample.
+        await inflight.promise.catch(() => {});
+        return freshForecast();
+    }
     if (lastFailure && Date.now() - lastFailure.at < FAILURE_BACKOFF_MS) throw lastFailure.error;
 
     const started = Date.now();
-    inflight = computeForecast(latestSample, horizonEnd)
+    const promise = computeForecast(latestSample, horizonEnd)
         .then((f) => {
             cached = f;
             lastFailure = undefined;
@@ -142,9 +151,10 @@ async function freshForecast(): Promise<Forecast> {
             throw error;
         })
         .finally(() => {
-            inflight = undefined;
+            if (inflight?.promise === promise) inflight = undefined;
         });
-    return inflight;
+    inflight = { latestSample, horizonEnd, promise };
+    return promise;
 }
 
 // Warm the cache after a crawl so page loads don't wait on the model. Errors are only logged.
