@@ -80,19 +80,50 @@ function dayBase(): number {
     return new Date().setHours(0, 0, 0, 0);
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+const OFFSET_BUCKET_MS = 15 * 60 * 1000; // UTC offsets only change on quarter-hour boundaries
+const offsetCache = new Map<number, number>();
+
+// Local UTC offset (ms) at epoch time `t`. Building a Date per sample dominated the prediction
+// time, so offsets are cached per 15-minute bucket.
+function utcOffsetMs(t: number): number {
+    const bucket = Math.floor(t / OFFSET_BUCKET_MS);
+    let off = offsetCache.get(bucket);
+    if (off === undefined) {
+        off = -new Date(bucket * OFFSET_BUCKET_MS).getTimezoneOffset() * 60 * 1000;
+        if (offsetCache.size > 100_000) offsetCache.clear();
+        offsetCache.set(bucket, off);
+    }
+    return off;
+}
+
+function toMs(v: any): number {
+    return typeof v === "number" ? v : v instanceof Date ? v.getTime() : new Date(v).getTime();
+}
+
+// Move every sample onto the day starting at `base` (local midnight), keeping its local time of
+// day. Equivalent to new Date(base).setHours(h, m, s, ms) of the sample's local time; that only
+// differs from base + time-of-day when `base` itself is a DST-change day, so only then the exact
+// (slow) path is used.
 function normalizeDataToTimeOfDay(data: TimeSeriesPiece[], base: number) {
+    const baseIsDstChange = utcOffsetMs(base) !== utcOffsetMs(base + DAY_MS - 1);
     return data
         .map((g) => {
-            const gDate = new Date(g.created_at);
-            return {
-                ...g,
-                created_at: new Date(base).setHours(
+            let created_at: number;
+            if (baseIsDstChange) {
+                const gDate = new Date(g.created_at);
+                created_at = new Date(base).setHours(
                     gDate.getHours(),
                     gDate.getMinutes(),
                     gDate.getSeconds(),
                     gDate.getMilliseconds(),
-                ),
-            };
+                );
+            } else {
+                const t = toMs(g.created_at);
+                const local = t + utcOffsetMs(t);
+                created_at = base + (((local % DAY_MS) + DAY_MS) % DAY_MS);
+            }
+            return { ...g, created_at };
         })
         .sort((a, b) => a.created_at - b.created_at);
 }
@@ -344,16 +375,8 @@ function makeClosestLine(
             mse *= DIFFERENT_WEEKDAY_WEIGHT_FACTOR;
         }
 
-        return {
-            day: {
-                data: candidateDay.data.map((d) => ({
-                    ...d,
-                    value: d.value * m,
-                })),
-                weight: candidateDay.weight,
-            },
-            distance: mse,
-        };
+        // The scaled copy is only made for the days that make the pool (below).
+        return { day: candidateDay, scale: m, distance: mse };
     });
 
     // Pool the closest matches (dropping days we couldn't score), then weight them by rank so the
@@ -368,7 +391,7 @@ function makeClosestLine(
     }
 
     const closestDays = ranked.map((d, rank) => ({
-        data: d.day.data,
+        data: d.day.data.map((p) => ({ ...p, value: p.value * (d.scale ?? 1) })),
         weight: (CLOSEST_POOL_SIZE - rank) ** RANK_DECAY,
     }));
 
