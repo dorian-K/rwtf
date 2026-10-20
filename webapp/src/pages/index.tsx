@@ -86,6 +86,13 @@ function ChartImpl({
     // and both bands at the current value so the prediction continues from it.
     let predLine = gymLine.interpLine;
     const lastActual = data[data.length - 1];
+    // Show the prediction only where there is no actual data yet: Similar Weeks spans the whole day,
+    // and a Timestral forecast made from an older sample starts inside the actual curve.
+    if (lastActual) {
+        predLine = predLine.filter(
+            (p) => adjustDate(new Date(p.created_at)) > lastActual.created_at,
+        );
+    }
     if (lastActual && predLine.length > 0) {
         const gap = adjustDate(new Date(predLine[0].created_at)) - lastActual.created_at;
         if (gap > 0 && gap <= 5 * 60 * 1000) {
