@@ -1,17 +1,17 @@
 import express from "express";
 import pool, { getConnection } from "./db.js";
 import getAuslastungNumber from "./gym_crawler.js";
-import { PoolConnection } from "mariadb";
+import type { PoolConnection } from "mariadb";
 import { SAMPLE } from "./sample_data.js";
 import { downloadStreamFile, isAachener, searchStudyFiles, inspectStudyFile } from "./study.js";
 import { rateLimit } from "express-rate-limit";
 import {
     buildFullWeek,
-    FullWeek,
+    type FullWeek,
     predictLine,
-    DayWindow,
+    type DayWindow,
     FULL_DAY,
-    PredictedPoint,
+    type PredictedPoint,
     getCurrentDayData,
 } from "./prediction.js";
 import {
@@ -78,22 +78,23 @@ async function gymCrawl() {
 }
 app.get("/api/v1/gym", async (req, res) => {
     // get offset from query
-    let dayoffset = req.query.dayoffset ? parseInt(req.query.dayoffset as string) : 0;
+    const dayoffset = req.query.dayoffset ? parseInt(req.query.dayoffset as string, 10) : 0;
 
-    if (dayoffset < 0 || dayoffset > 6 || isNaN(dayoffset)) {
+    if (dayoffset < 0 || dayoffset > 6 || Number.isNaN(dayoffset)) {
         res.status(400).send('{error: true, msg: "Invalid dayoffset"}');
         return;
     }
 
-    let conn;
+    let conn: PoolConnection | undefined;
     try {
         conn = await getConnection();
-        let startTime = new Date();
+        const startTime = new Date();
         let response: any;
+        // biome-ignore lint/correctness/noConstantCondition: manual toggle to serve SAMPLE
         if (false) {
             response = SAMPLE;
         } else {
-            let weeks = [];
+            const weeks = [];
             for (let i = 0; i <= 3; i++) {
                 const startDate = new Date();
                 startDate.setDate(startDate.getDate() - i * 7 + dayoffset);
@@ -124,8 +125,8 @@ app.get("/api/v1/gym", async (req, res) => {
             };
         }
 
-        let endTime = new Date();
-        let queryMs = endTime.getTime() - startTime.getTime();
+        const endTime = new Date();
+        const queryMs = endTime.getTime() - startTime.getTime();
 
         // caching
         res.setHeader("Cache-Control", "public, max-age=60"); // 1 minute
@@ -151,7 +152,7 @@ async function similarWeeksLine(
     targetDate.setDate(targetDate.getDate() + dayoffset);
     const currentDayOfWeek = targetDate.getDay();
 
-    let weeks: FullWeek[] = [];
+    const weeks: FullWeek[] = [];
     for (let i = 0; i <= NUM_WEEKS; i++) {
         const weekDate = new Date(targetDate);
         weekDate.setDate(weekDate.getDate() - i * 7);
@@ -188,9 +189,9 @@ async function similarWeeksLine(
 
 app.get("/api/v1/gym_interpline", async (req, res) => {
     // get offset from query
-    let dayoffset = req.query.dayoffset ? parseInt(req.query.dayoffset as string) : 0;
+    const dayoffset = req.query.dayoffset ? parseInt(req.query.dayoffset as string, 10) : 0;
 
-    if (dayoffset < 0 || dayoffset > MAX_DAY_OFFSET || isNaN(dayoffset)) {
+    if (dayoffset < 0 || dayoffset > MAX_DAY_OFFSET || Number.isNaN(dayoffset)) {
         res.status(400).send('{error: true, msg: "Invalid dayoffset"}');
         return;
     }
@@ -205,11 +206,10 @@ app.get("/api/v1/gym_interpline", async (req, res) => {
         return;
     }
 
-    let conn;
+    let conn: PoolConnection | undefined;
     try {
         conn = await getConnection();
-        let startTime = new Date();
-        let response: any;
+        const startTime = new Date();
 
         let predicted: PredictedPoint[];
         if (method === "timestral") {
@@ -243,8 +243,8 @@ app.get("/api/v1/gym_interpline", async (req, res) => {
             allTimeHigh = 0;
         }
 
-        let endTime = new Date();
-        let queryMs = endTime.getTime() - startTime.getTime();
+        const endTime = new Date();
+        const queryMs = endTime.getTime() - startTime.getTime();
 
         // caching
         res.setHeader("Cache-Control", "public, max-age=" + 60 * 10); // 10 minutes
@@ -272,7 +272,7 @@ if (!process.env.WIFIAP_TOKEN) {
 }
 app.post("/api/v1/wifiap", limiterPost, express.json({ limit: "500kb" }), async (req, res) => {
     const data = req.body;
-    if (!data || !data.data || !data.version || !data.header) {
+    if (!data?.data || !data.version || !data.header) {
         res.status(400).send('{error: true, msg: "Invalid body"}');
         return;
     }
@@ -293,15 +293,15 @@ app.post("/api/v1/wifiap", limiterPost, express.json({ limit: "500kb" }), async 
         return;
     }
 
-    let conn;
+    let conn: PoolConnection | undefined;
     try {
-        let keys = data.header;
+        const keys = data.header;
         conn = await getConnection();
         await conn.beginTransaction();
         let numAdded = 0;
         try {
             for (const rowWithoutKeys of data.data) {
-                let row: any = {};
+                const row: any = {};
                 for (let i = 0; i < keys.length; i++) {
                     row[keys[i]] = rowWithoutKeys[i];
                 }
@@ -309,13 +309,13 @@ app.post("/api/v1/wifiap", limiterPost, express.json({ limit: "500kb" }), async 
                 await conn.query(
                     `INSERT INTO wifi_data_apnames (apname, location, building, organisation) VALUES (?, ?, ?, ?)
                     ON DUPLICATE KEY UPDATE apname=apname`,
-                    [row["Name"], row["Cover / Ort"], row["Gebäude"], row["Organisation"]],
+                    [row.Name, row["Cover / Ort"], row.Gebäude, row.Organisation],
                 );
 
                 // check if the numbers are parseable ints
                 if (
-                    isNaN(parseInt(row["Nutzer 2.4 GHz"])) ||
-                    isNaN(parseInt(row["Nutzer 5 GHz"]))
+                    Number.isNaN(parseInt(row["Nutzer 2.4 GHz"], 10)) ||
+                    Number.isNaN(parseInt(row["Nutzer 5 GHz"], 10))
                 ) {
                     console.error("Invalid data for wifiap", row);
                 } else {
@@ -323,10 +323,10 @@ app.post("/api/v1/wifiap", limiterPost, express.json({ limit: "500kb" }), async 
                         `INSERT INTO wifi_data (apname, users_2_4_ghz, users_5_ghz, online, last_online) VALUES (?, ?, ?, ?, ?)
                         ON DUPLICATE KEY UPDATE apname=apname`,
                         [
-                            row["Name"],
+                            row.Name,
                             row["Nutzer 2.4 GHz"],
                             row["Nutzer 5 GHz"],
-                            row["Online"] ? 1 : 0,
+                            row.Online ? 1 : 0,
                             parse(
                                 row["Zuletzt als online geprüft"],
                                 "dd.MM.yyyy HH:mm",
@@ -362,7 +362,7 @@ function hashObj(obj: any): string {
 app.post("/api/v1/upload", limiterPost, express.json({ limit: "1000kb" }), async (req, res) => {
     const data = req.body;
 
-    if (!data || !data.deviceId || !data.version || data.version !== 1 || !data.data) {
+    if (!data?.deviceId || !data.version || data.version !== 1 || !data.data) {
         res.status(400).send('{"ok": false, "msg": "Invalid body"}');
         return;
     }
@@ -379,7 +379,7 @@ app.post("/api/v1/upload", limiterPost, express.json({ limit: "1000kb" }), async
         return;
     }
 
-    let conn;
+    let conn: PoolConnection | undefined;
     try {
         conn = await getConnection();
         await conn.beginTransaction();
@@ -485,7 +485,7 @@ app.get("/api/v1/gym/export", limiterExport, async (req, res) => {
     // End of end date in local time (23:59:59.999)
     const endOfEndDate = new Date(endDate.getTime() + 24 * 60 * 60 * 1000 - 1);
 
-    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
         res.status(400).json({ error: true, msg: "Invalid date format" });
         return;
     }
@@ -521,7 +521,7 @@ app.get("/api/v1/gym/export", limiterExport, async (req, res) => {
 
     // Safety limit: 10,000 data points per request (per PR specification)
     const MAX_ROWS = 10000;
-    let conn;
+    let conn: PoolConnection | undefined;
     try {
         conn = await getConnection();
 
@@ -551,7 +551,7 @@ app.get("/api/v1/gym/export", limiterExport, async (req, res) => {
         const formatTimestamp = (value: any): string => {
             if (value instanceof Date) return value.toISOString();
             const d = new Date(value);
-            return isNaN(d.getTime()) ? String(value) : d.toISOString();
+            return Number.isNaN(d.getTime()) ? String(value) : d.toISOString();
         };
 
         // Build Content-Disposition: sanitize all values for header safety
@@ -618,7 +618,7 @@ app.get("/api/v1/gym/history", async (req, res) => {
     const startDate = new Date(startDateStr);
     const endDate = new Date(endDateStr);
 
-    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
         res.status(400).json({ error: true, msg: "Invalid date format" });
         return;
     }
@@ -637,12 +637,11 @@ app.get("/api/v1/gym/history", async (req, res) => {
         case "month":
             dateFormat = "%Y-%m";
             break;
-        case "day":
-        default:
+        default: // "day"
             dateFormat = "%Y-%m-%d";
     }
 
-    let conn;
+    let conn: PoolConnection | undefined;
     try {
         conn = await getConnection();
         const startTime = new Date();
@@ -662,7 +661,7 @@ app.get("/api/v1/gym/history", async (req, res) => {
             [dateFormat, startDate, endDate],
         );
 
-        let queryMs = new Date().getTime() - startTime.getTime();
+        const queryMs = Date.now() - startTime.getTime();
 
         res.setHeader("Cache-Control", "public, max-age=3600"); // 1 hour cache
         res.setHeader("Server-Timing", `db;dur=${queryMs}`);
@@ -682,8 +681,8 @@ app.get("/api/v1/gym/history", async (req, res) => {
 });
 
 // GET /api/v1/gym/monthly - monthly aggregates
-app.get("/api/v1/gym/monthly", async (req, res) => {
-    let conn;
+app.get("/api/v1/gym/monthly", async (_req, res) => {
+    let conn: PoolConnection | undefined;
     try {
         conn = await getConnection();
         const startTime = new Date();
@@ -733,7 +732,7 @@ app.get("/api/v1/gym/monthly", async (req, res) => {
             peak_hour: peakHoursMap[row.month] !== undefined ? peakHoursMap[row.month] : null,
         }));
 
-        let queryMs = new Date().getTime() - startTime.getTime();
+        const queryMs = Date.now() - startTime.getTime();
 
         res.setHeader("Cache-Control", "public, max-age=86400"); // 24 hour cache
         res.setHeader("Server-Timing", `db;dur=${queryMs}`);
@@ -750,8 +749,8 @@ app.get("/api/v1/gym/monthly", async (req, res) => {
 });
 
 // GET /api/v1/gym/hourly-pattern - typical patterns by hour
-app.get("/api/v1/gym/hourly-pattern", async (req, res) => {
-    let conn;
+app.get("/api/v1/gym/hourly-pattern", async (_req, res) => {
+    let conn: PoolConnection | undefined;
     try {
         conn = await getConnection();
         const startTime = new Date();
@@ -795,7 +794,7 @@ app.get("/api/v1/gym/hourly-pattern", async (req, res) => {
             ORDER BY day_of_week, hour`,
         );
 
-        let queryMs = new Date().getTime() - startTime.getTime();
+        const queryMs = Date.now() - startTime.getTime();
 
         res.setHeader("Cache-Control", "public, max-age=86400"); // 24 hour cache
         res.setHeader("Server-Timing", `db;dur=${queryMs}`);
@@ -877,7 +876,7 @@ app.get("/api/v1/wifi/buildings", async (req, res) => {
         res.status(403).json({ error: true, msg: "Access restricted to Aachen network" });
         return;
     }
-    let conn;
+    let conn: PoolConnection | undefined;
     try {
         conn = await getConnection();
         const rows = await conn.query(
@@ -911,14 +910,14 @@ app.get("/api/v1/wifi/building", async (req, res) => {
         res.status(400).json({ error: true, msg: "building is required" });
         return;
     }
-    let hours = parseInt((req.query.hours as string) || "24");
-    if (isNaN(hours) || hours < 1 || hours > 168) hours = 24;
+    let hours = parseInt((req.query.hours as string) || "24", 10);
+    if (Number.isNaN(hours) || hours < 1 || hours > 168) hours = 24;
 
     // "Current" snapshot window: an AP that hasn't reported within this many hours is treated as
     // gone (handles disabled routers — they simply drop out of the current totals).
     const CURRENT_WINDOW_HOURS = 3;
 
-    let conn;
+    let conn: PoolConnection | undefined;
     try {
         conn = await getConnection();
         const t0 = new Date();
@@ -935,7 +934,7 @@ app.get("/api/v1/wifi/building", async (req, res) => {
                 building,
                 current: { total_users: 0, active_aps: 0, total_aps: 0, last_updated: null },
                 history: [],
-                queryMs: new Date().getTime() - t0.getTime(),
+                queryMs: Date.now() - t0.getTime(),
             });
             return;
         }
@@ -990,7 +989,7 @@ app.get("/api/v1/wifi/building", async (req, res) => {
         );
 
         const cur = currentRows[0] ?? {};
-        const queryMs = new Date().getTime() - t0.getTime();
+        const queryMs = Date.now() - t0.getTime();
 
         res.setHeader("Cache-Control", "public, max-age=60");
         res.json({
@@ -1030,14 +1029,14 @@ app.get("/api/v1/wifi/building_predict", async (req, res) => {
         return;
     }
 
-    let dayoffset = req.query.dayoffset ? parseInt(req.query.dayoffset as string) : 0;
-    if (isNaN(dayoffset) || dayoffset < 0 || dayoffset > 6) dayoffset = 0;
+    let dayoffset = req.query.dayoffset ? parseInt(req.query.dayoffset as string, 10) : 0;
+    if (Number.isNaN(dayoffset) || dayoffset < 0 || dayoffset > 6) dayoffset = 0;
 
     // WiFi history is shallow compared to the gym (only a few months). Cap the lookback window; weeks
     // with no data simply produce no rows in the single range query below, so empties are free.
     const NUM_WEEKS = 26;
 
-    let conn;
+    let conn: PoolConnection | undefined;
     try {
         conn = await getConnection();
         const t0 = new Date();
@@ -1099,7 +1098,7 @@ app.get("/api/v1/wifi/building_predict", async (req, res) => {
         // The in-progress day lives in week[0]; extract it as the "actual so far" series.
         const dataToday = getCurrentDayData(weeks[0], currentDayOfWeek);
 
-        const queryMs = new Date().getTime() - t0.getTime();
+        const queryMs = Date.now() - t0.getTime();
         res.setHeader("Cache-Control", "public, max-age=" + 60 * 10); // 10 minutes
         res.setHeader("Server-Timing", `db;dur=${queryMs}`);
         res.json({
@@ -1117,12 +1116,12 @@ app.get("/api/v1/wifi/building_predict", async (req, res) => {
     }
 });
 
-app.get("/api", (req, res) => {
+app.get("/api", (_req, res) => {
     res.send("Hello World!");
 });
 
 const database_init = async () => {
-    let conn;
+    let conn: PoolConnection | undefined;
     try {
         conn = await getConnection();
 
@@ -1240,7 +1239,7 @@ database_init()
         setInterval(gymCrawl, 1000 * 60 * 5); // 5 minutes
         gymCrawl();
 
-        let server = app.listen(port, () => {
+        const server = app.listen(port, () => {
             console.log(`Example app listening on port ${port}`);
         });
 

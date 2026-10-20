@@ -7,7 +7,7 @@
 // model except right after a restart.
 
 import { getConnection } from "./db.js";
-import { DayWindow, PredictedPoint } from "./prediction.js";
+import type { DayWindow, PredictedPoint } from "./prediction.js";
 
 const TIMESTRAL_URL = process.env.TIMESTRAL_URL; // unset = feature disabled (e.g. local dev)
 const STEP_MS = 5 * 60 * 1000; // crawler cadence, and the grid the model sees
@@ -120,7 +120,7 @@ async function freshForecast(): Promise<Forecast> {
     } finally {
         conn.end();
     }
-    if (!isFinite(latestSample) || Date.now() - latestSample > MAX_STALENESS_MS) {
+    if (!Number.isFinite(latestSample) || Date.now() - latestSample > MAX_STALENESS_MS) {
         throw new Error("no recent gym data to forecast from");
     }
 

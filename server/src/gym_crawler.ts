@@ -40,12 +40,12 @@ async function getUptodatePic(): Promise<Sharp> {
 
 // Function to split image into parts
 async function splitImg(img: Sharp): Promise<ImagePart[]> {
-    let metadata = await img.metadata();
+    const metadata = await img.metadata();
     const width = metadata.width ?? 0;
     const height = metadata.height ?? 0;
 
     // find and remove empty columns (transparent)
-    let digitParts = []; // segments of digits
+    const digitParts = []; // segments of digits
     let digitStart = -1;
 
     //console.log("### Splitting Image ###");
@@ -165,13 +165,13 @@ function getNumbersSynthetic(): Record<number, Sharp> {
 
 // Simplified versions of makeDiff and diffVal using sharp
 
-async function diffVal(im1Buffer: Buffer, im2Buffer: Buffer, num: string): Promise<number> {
+async function diffVal(im1Buffer: Buffer, im2Buffer: Buffer, _num: string): Promise<number> {
     const im1 = sharp(im1Buffer);
     const im2 = sharp(im2Buffer);
 
     const m1 = await im1.metadata();
     const m2 = await im2.metadata();
-    if (m1.width != m2.width || m1.height != m2.height) {
+    if (m1.width !== m2.width || m1.height !== m2.height) {
         throw new Error("Images must have the same dimensions");
     }
 
@@ -211,7 +211,7 @@ async function matchNumber(
 
         if (diff < minDiff) {
             minDiff = diff;
-            matchedNumber = parseInt(number);
+            matchedNumber = parseInt(number, 10);
         }
     }
 
@@ -222,7 +222,7 @@ export async function getAuslastungAndMatchNumbers(
     pic: Sharp,
     debug = undefined as string | undefined,
 ): Promise<[number, number][]> {
-    let auslastung = pic;
+    const auslastung = pic;
     // save to disk
     //auslastung.toFile("./pics/auslastung.gif");
     const numbers = await getNumbersSynthetic();
@@ -245,7 +245,7 @@ export async function getAuslastungAndMatchNumbers(
 export default async function getAuslastungNumber(): Promise<number> {
     const pic = await getUptodatePic();
     const reconstructedDigits = await getAuslastungAndMatchNumbers(pic);
-    return parseInt(reconstructedDigits.map((digit) => digit[0].toString()).join(""));
+    return parseInt(reconstructedDigits.map((digit) => digit[0].toString()).join(""), 10);
 }
 
 /*

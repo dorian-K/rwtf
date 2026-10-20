@@ -359,7 +359,7 @@ function makeClosestLine(
     // Pool the closest matches (dropping days we couldn't score), then weight them by rank so the
     // center line still favors the best matches while the band spans the whole pool.
     const ranked = distances
-        .filter((d) => isFinite(d.distance))
+        .filter((d) => Number.isFinite(d.distance))
         .sort((a, b) => a.distance - b.distance)
         .slice(0, CLOSEST_POOL_SIZE);
 
@@ -369,7 +369,7 @@ function makeClosestLine(
 
     const closestDays = ranked.map((d, rank) => ({
         data: d.day.data,
-        weight: Math.pow(CLOSEST_POOL_SIZE - rank, RANK_DECAY),
+        weight: (CLOSEST_POOL_SIZE - rank) ** RANK_DECAY,
     }));
 
     return averageDays(closestDays, window);
@@ -406,10 +406,4 @@ function predictLine(
     return makeClosestLine(weeks.slice(1), weeks[0], currentDayOfWeek, window);
 }
 
-export {
-    buildFullWeek,
-    makeAverageLine,
-    makeClosestLine,
-    getCurrentDayData,
-    predictLine,
-};
+export { buildFullWeek, makeAverageLine, makeClosestLine, getCurrentDayData, predictLine };

@@ -1,6 +1,6 @@
 import sharp, { type Sharp } from "sharp";
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
 import { getAuslastungAndMatchNumbers } from "../src/gym_crawler.js";
 
 function getPicsFromFs(): Record<string, Sharp> {
@@ -23,7 +23,8 @@ async function runTest() {
         Object.entries(pics).map(async ([key, image]) => {
             const reconstructedDigits = await getAuslastungAndMatchNumbers(image.clone(), key);
             const classified = parseInt(
-                reconstructedDigits.map((digit) => digit[0].toString()).join("")
+                reconstructedDigits.map((digit) => digit[0].toString()).join(""),
+                10,
             );
             console.log(`Expected: ${key}, Classified: ${classified}`);
             /*await image.metadata().then((metadata) => {
@@ -36,7 +37,7 @@ async function runTest() {
 
                 await getAuslastungAndMatchNumbers(image.clone(), key);
             }
-        })
+        }),
     );
 
     if (failed === 0) {

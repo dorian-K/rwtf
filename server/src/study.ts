@@ -1,12 +1,12 @@
 import fetch from "node-fetch";
-import fs from "fs";
-import fsPromises from "fs/promises";
-import path from "path";
-import { pipeline as streamPipeline } from "stream/promises";
-import { Request, Response } from "express";
+import fs from "node:fs";
+import fsPromises from "node:fs/promises";
+import path from "node:path";
+import { pipeline as streamPipeline } from "node:stream/promises";
+import type { Request, Response } from "express";
 import ipRangeCheck from "ip-range-check";
 import { getConnection } from "./db.js";
-import { PoolConnection } from "mariadb";
+import type { PoolConnection } from "mariadb";
 
 const FETCH_HEADERS = {
     accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng;q=0.8,application/signed-exchange;v=b3;q=0.7",
@@ -43,7 +43,7 @@ const cachedFiles: { [url: string]: CachedFile } = {};
 setInterval(
     () => {
         const keys = Object.keys(cachedFiles);
-        for (let key of keys) {
+        for (const key of keys) {
             if (!fs.existsSync(cachedFiles[key].path)) {
                 delete cachedFiles[key];
             }
@@ -188,13 +188,13 @@ async function downloadStudyFunky(origUrl: string): Promise<CachedFile> {
     });
     const jResp = (await response.json()) as any;
 
-    let data = jResp["data"];
-    if (!data || !data.hasOwnProperty("filename") || !data.hasOwnProperty("file_preview")) {
+    const data = jResp.data;
+    if (!data || !Object.hasOwn(data, "filename") || !Object.hasOwn(data, "file_preview")) {
         throw new UserError("Failed to fetch file, missing data", "upstream");
     }
-    let name = String(data["filename"] ?? "");
-    let preview = String(data["file_preview"] ?? "");
-    let token = preview.split("token=").pop();
+    const name = String(data.filename ?? "");
+    const preview = String(data.file_preview ?? "");
+    const token = preview.split("token=").pop();
     const candidates = extensionCandidates(name, preview, docId);
 
     // A cached copy from an earlier guess wins over re-probing the CDN.
@@ -285,11 +285,11 @@ async function downloadStudyFunky(origUrl: string): Promise<CachedFile> {
                     `${docId}.${ending}`,
                     docId,
                     name,
-                    data["course_name"] ?? "",
-                    data["file_type"] ?? -1,
-                    data["university_name"] ?? "",
-                    data["professor_name"] ?? "",
-                    data["semester"]?.["name"] ?? "",
+                    data.course_name ?? "",
+                    data.file_type ?? -1,
+                    data.university_name ?? "",
+                    data.professor_name ?? "",
+                    data.semester?.name ?? "",
                     JSON.stringify(data),
                     1,
                 ],
@@ -306,10 +306,10 @@ async function downloadStudyFunky(origUrl: string): Promise<CachedFile> {
     return result;
 }
 
-let valid_ip_ranges: string[] = [];
-let invalid_ip_ranges: string[] = [];
+const valid_ip_ranges: string[] = [];
+const invalid_ip_ranges: string[] = [];
 
-export async function isAachener(req: Request, res: Response) {
+export async function isAachener(req: Request, _res: Response) {
     // check if ip in allowed list
     const IP_RANGES = [
         "134.130.0.0/16",
@@ -554,16 +554,16 @@ export async function downloadStreamFile(req: Request, res: Response) {
 setInterval(
     () => {
         console.log("Housekeeping");
-        let files = fs.readdirSync(OS_TEMP);
+        const files = fs.readdirSync(OS_TEMP);
         // total size should not exceed 50gb
-        let filesStat = files.map((f) => fsPromises.stat(path.join(OS_TEMP, f)));
+        const filesStat = files.map((f) => fsPromises.stat(path.join(OS_TEMP, f)));
         Promise.all(filesStat)
             .then((stats) => {
                 let totalSize = stats.reduce((acc, val) => acc + val.size, 0);
                 if (totalSize > 50 * 1024 * 1024 * 1024 || files.length > 10000) {
                     // 50gb
                     // delete oldest files until size is below 40gb
-                    let sorted = stats
+                    const sorted = stats
                         .map((s, i) => ({ atime: s.atimeMs, size: s.size, file: files[i] }))
                         .sort((a, b) => a.atime - b.atime);
                     let i = 0;

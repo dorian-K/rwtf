@@ -12,7 +12,13 @@
 // Run against a locally published DB:  DB_HOST=127.0.0.1 node dist/test/backtest.js
 
 import pool from "../src/db.js";
-import { buildFullWeek, predictLine, FullWeek, DayWindow, PredictedPoint } from "../src/prediction.js";
+import {
+    buildFullWeek,
+    predictLine,
+    type FullWeek,
+    type DayWindow,
+    type PredictedPoint,
+} from "../src/prediction.js";
 
 const GYM_WINDOW: DayWindow = { startHour: 6, endHour: 24 };
 const NUM_WEEKS = 120; // matches the live route
@@ -74,11 +80,7 @@ function makeActualInterp(day: Piece[]): (todMin: number) => number | null {
 
 // Build the weeks array as of `cutoff` on day D, from the pre-bucketed day map. Excludes any sample
 // after the cutoff (leakage guard): future days in D's own week are dropped, D's day is truncated.
-function buildWeeksAsOf(
-    dayMap: Map<string, Piece[]>,
-    D: Date,
-    cutoff: Date,
-): FullWeek[] {
+function buildWeeksAsOf(dayMap: Map<string, Piece[]>, D: Date, cutoff: Date): FullWeek[] {
     const currentDayOfWeek = D.getDay();
     const dKey = dayKey(D);
     const weeks: FullWeek[] = [];
@@ -146,7 +148,9 @@ async function main() {
     const firstUsable = new Date(evalDays[0]);
     firstUsable.setDate(firstUsable.getDate() + 56);
     const usableDays = evalDays.filter((d) => d >= firstUsable);
-    console.log(`evaluating ${usableDays.length} well-covered days x ${CUTOFF_HOURS.length} cutoffs`);
+    console.log(
+        `evaluating ${usableDays.length} well-covered days x ${CUTOFF_HOURS.length} cutoffs`,
+    );
 
     const records: Record[] = [];
     let done = 0;
@@ -206,7 +210,11 @@ async function main() {
         }
         all.sort((a, b) => a - b);
         const sortedByKey = new Map<number, number[]>();
-        for (const [k, arr] of byKey) sortedByKey.set(k, arr.slice().sort((a, b) => a - b));
+        for (const [k, arr] of byKey)
+            sortedByKey.set(
+                k,
+                arr.slice().sort((a, b) => a - b),
+            );
         const globalQ = (q: number) => quantile(all, q);
         return (r: Record, q: number): number => {
             const arr = sortedByKey.get(keyOf(r));
@@ -215,7 +223,8 @@ async function main() {
         };
     }
 
-    const horizonKey = (r: Record) => Math.min(Math.floor(r.horizon / HORIZON_BIN_MIN), MAX_HORIZON_BIN);
+    const horizonKey = (r: Record) =>
+        Math.min(Math.floor(r.horizon / HORIZON_BIN_MIN), MAX_HORIZON_BIN);
     const todKey = (r: Record) => Math.floor(r.todMin / 180); // 3-hour time-of-day buckets
     const horizonTodKey = (r: Record) => horizonKey(r) * 100 + todKey(r);
 
@@ -241,8 +250,7 @@ async function main() {
         const n = test.length;
         console.log(
             `  ${name.padEnd(22)} cov50=${((cov50 / n) * 100).toFixed(1)}%  cov90=${(
-                (cov90 / n) *
-                100
+                (cov90 / n) * 100
             ).toFixed(1)}%  w50=${(width50 / n).toFixed(1)}  w90=${(width90 / n).toFixed(1)}  ` +
                 `pinball(.25/.75)=${(pb25 / n).toFixed(3)}/${(pb75 / n).toFixed(3)}`,
         );
