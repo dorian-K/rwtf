@@ -691,6 +691,9 @@ function DataExportForm() {
     );
 }
 
+// Visit counting started in late October 2026; before November the 7-day sum would undercount.
+const SHOW_VISITS_FROM = new Date("2026-11-01T00:00:00");
+
 function GymStuff() {
     const api = useBackendContext();
     const [embedCode, setEmbedCode] = useState<string>(EMBED_CODE("https://rwtf.dorianko.ch"));
@@ -700,6 +703,7 @@ function GymStuff() {
 
     useEffect(() => {
         api.isAachener().then(setIsAachen);
+        if (Date.now() < SHOW_VISITS_FROM.getTime()) return;
         api.getStats()
             .then((s) => setVisits7d(s.visits7d))
             .catch(() => {}); // the counter is decoration; hide it if stats are unavailable
