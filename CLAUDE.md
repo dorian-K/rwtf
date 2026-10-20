@@ -105,5 +105,5 @@ The **`webapp/`** static export is built into a Docker volume that nginx serves 
 
 ## Git
 
-- Always commit finished work without waiting to be asked.
+- Always commit finished work without waiting to be asked: one commit per complete feature or fix, not one per step (a feature touching server, webapp, and config is still one commit).
 - Keep commit titles short and compact, in the existing `area: summary` style (e.g. `gym: ...`).
