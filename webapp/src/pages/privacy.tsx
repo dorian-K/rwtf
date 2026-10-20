@@ -39,10 +39,6 @@ export default function PrivacyPage() {
                     Salt and hashes are deleted at midnight; only totals remain (kept 2 years,
                     public on <Link href="/stats">Usage stats</Link>).
                 </li>
-                <li>
-                    WiFi Scanner app: uploaded access point scans with GPS position and device ID,
-                    kept until you ask for deletion.
-                </li>
             </ul>
             <p>
                 Your browser only stores your chosen prediction method (local storage, never sent to
