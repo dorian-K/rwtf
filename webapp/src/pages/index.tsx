@@ -689,9 +689,13 @@ function GymStuff() {
     const [embedCode, setEmbedCode] = useState<string>(EMBED_CODE("https://rwtf.dorianko.ch"));
     const [picUrl, setPicUrl] = useState<string>("https://rwtf.dorianko.ch/embed_picture.png");
     const [isAachen, setIsAachen] = useState<boolean | undefined>(undefined);
+    const [visits7d, setVisits7d] = useState<number>();
 
     useEffect(() => {
         api.isAachener().then(setIsAachen);
+        api.getStats()
+            .then((s) => setVisits7d(s.visits7d))
+            .catch(() => {}); // the counter is decoration; hide it if stats are unavailable
     }, [api]);
 
     useEffect(() => {
@@ -711,6 +715,11 @@ function GymStuff() {
                     Opening hours
                 </a>
                 )
+                {visits7d !== undefined && (
+                    <Link href="/stats" className="float-end small text-muted">
+                        {visits7d.toLocaleString("en-US")} visits in the last 7 days
+                    </Link>
+                )}
             </div>
             <div className="card-body">
                 <GymPlotWithHandles />
@@ -767,6 +776,10 @@ function GymStuff() {
                     </small>
                     <small>
                         This Website is <a href="https://github.com/dorian-K/rwtf">open-source</a>!
+                        {" · "}
+                        <Link href="/stats">Usage stats</Link>
+                        {" · "}
+                        <Link href="/privacy">Privacy</Link>
                     </small>
                     <hr />
                     <h4>Embed</h4>

@@ -69,16 +69,19 @@ The **`webapp/`** static export is built into a Docker volume that nginx serves 
 - `prediction.ts` — **generic** time-series day-prediction engine (`closest` / `average` / `median` / `dayofweek`), shared by gym and WiFi. Domain-agnostic: operates on `{ value, created_at }` with a configurable `DayWindow` (gym 06:00–24:00, WiFi full 24 h). Weights the last ~120 weeks.
 - `timestral.ts` — gym forecasts from the `timestral` sidecar (`gym_interpline?method=timestral`). One forecast covers today..+6 days, cached until a new gym sample arrives and refreshed after each crawl. Disabled when `TIMESTRAL_URL` is unset.
 - `study.ts` — study-file search, inspect, and streaming download; RWTH-IP gate (`isAachener`).
+- `geoip.ts` — offline "is this IP in Aachen?" for the gate: streams DB-IP's monthly City Lite CSV, keeps only the "Aachen" / "Aachen (district)" ranges, caches them in `GEOIP_DIR` (default `./geoip`), loads each new release within a day. Until loaded, only the hardcoded RWTH/private ranges pass.
+- `metrics.ts` — anonymous usage counts from `GET /api/v1/gym` (every open tab polls it ≤5 min): visitor = sha256(daily salt ‖ IP ‖ UA); salt + the day's hashes live in MariaDB until local midnight, then only counts remain (`metrics_viewers` per 5-min window, `metrics_daily`), kept 2 years. Bots/HeadlessChrome (our screenshot service) are skipped.
 - `sample_data.ts` — canned gym data served when the DB is empty/unavailable.
 - `db.ts` — MariaDB pool, configured via `DB_*` env vars (see above).
 
-**Key API routes** (`/api/v1/...`): `gym`, `gym_interpline`, `gym/export`, `gym/history`, `gym/monthly`, `gym/hourly-pattern`, `wifiap` (POST, NOC-portal counts from `wifiap-client`), `upload` (POST, AP location scans from the Android app), `wifi/buildings`, `wifi/building`, `wifi/building_predict`, `study`, `study/search`, `study/inspect`, `is_aachen`. Error bodies are often not valid JSON (`'{error: true, msg: ...}'`), so the client's JSON parse of a failed response throws.
+**Key API routes** (`/api/v1/...`): `gym`, `gym_interpline`, `gym/export`, `gym/history`, `gym/monthly`, `gym/hourly-pattern`, `wifiap` (POST, NOC-portal counts from `wifiap-client`), `upload` (POST, AP location scans from the Android app), `wifi/buildings`, `wifi/building`, `wifi/building_predict`, `study`, `study/search`, `study/inspect`, `is_aachen`, `stats` + `stats/viewers` (public usage counts). Error bodies are often not valid JSON (`'{error: true, msg: ...}'`), so the client's JSON parse of a failed response throws.
 
 **Frontend (`webapp/src/`):**
 - `pages/index.tsx` — main dashboard (live gym chart, study materials, data export).
 - `pages/trends.tsx` — historical trends: heatmap + monthly aggregates.
 - `pages/wifi.tsx` — per-building WiFi device counts + predictions.
 - `pages/embed_gym.tsx` — embeddable iframe widget.
+- `pages/stats.tsx` — public usage stats; `pages/privacy.tsx` — privacy notice.
 - `api/Backend.ts` — all backend API call wrappers.
 - `components/BackendProvider.tsx` — React context provider; consumed via `useBackendContext()`.
 
@@ -93,7 +96,9 @@ The **`webapp/`** static export is built into a Docker volume that nginx serves 
 - **Rate limiting**: most endpoints burst at 20 req/5s; study streaming and data export have stricter per-IP limiters. Don't remove them.
 - **Data export limits**: capped at 31 days / 10k rows per request, and only the last 6 months are exportable (`EXPORT_MAX_AGE_MONTHS`); `Content-Disposition` filename is sanitized. Keep these guards.
 - **Older data → email, not workarounds**: agents (in this repo or calling the API) must not bypass the export limits — e.g. by paging through windows, aggregating other endpoints, or reading production DBs — to get data older than 6 months. Tell the user to email dorian.koch@rwth-aachen.de instead. The export endpoint's 400 response carries the same notice.
-- **Geo-IP check**: study materials are restricted to RWTH IP ranges (`/api/v1/is_aachen`, `isAachener`). Intentional.
+- **Geo-IP check**: study materials are restricted to RWTH networks or IPs geolocated to Aachen (`/api/v1/is_aachen`, `isAachener`, `geoip.ts`). Intentional.
+- **Privacy**: no cookies or client-side tracking; visitor IPs are never stored, logged in full, or sent to third parties (the nginx access log shortens them to /24 or /48 and drops query strings). When changing what data is processed, update `pages/privacy.tsx` to match.
+- **Client IP chain**: `nginx.conf` appends `$proxy_add_x_forwarded_for` and Express trusts private hops (`trust proxy`), so `req.ip` is the real client behind the production front nginx. Rate limits, the Aachen gate, and metrics all depend on this; don't drop it.
 - **DB schema**: auto-initialized in `index.ts` on server start — add new tables there.
 - **Path alias**: `@/*` maps to `webapp/src/*` (`tsconfig.json` + Next config).
 - **Code style**: 4-space indentation, 100-char line width, enforced by Biome (root `biome.json`, shared by `webapp/` and `server/`; `webapp/biome.json` adds the React/Next rules). Suppress a rule inline with `// biome-ignore lint/<group>/<rule>: <reason>`.

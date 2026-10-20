@@ -30,6 +30,17 @@ export interface HistoryDataPoint {
     sample_count: number;
 }
 
+// Usage statistics (server/src/metrics.ts): unique visitors per day, viewers per 5-min window.
+export interface StatsResponse {
+    visits7d: number; // sum of daily unique visitors over the last 7 days, today included
+    daily: { day: string; uniques: number }[]; // oldest first, YYYY-MM-DD
+}
+
+export interface ViewersResponse {
+    day: string;
+    windows: { t: string; dashboard: number; embed: number }[]; // t = window start, ISO
+}
+
 export interface MonthlyDataPoint {
     month: string;
     avg_utilization: number;
@@ -284,6 +295,16 @@ export class Backend {
 
     getGymMonthly(): Promise<{ data: MonthlyDataPoint[]; queryMs: number }> {
         return this.processResponse(this.fetch("/api/v1/gym/monthly"));
+    }
+
+    getStats(): Promise<StatsResponse> {
+        return this.processResponse(this.fetch("/api/v1/stats"));
+    }
+
+    getViewers(day: string): Promise<ViewersResponse> {
+        return this.processResponse(
+            this.fetch(`/api/v1/stats/viewers?day=${encodeURIComponent(day)}`),
+        );
     }
 
     getGymHourlyPattern(): Promise<HourlyPatternResponse> {
