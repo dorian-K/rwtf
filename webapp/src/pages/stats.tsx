@@ -196,7 +196,6 @@ export default function StatsPage() {
                 A visit is one browser on one day: the server recognizes repeat requests within a
                 day by a salted hash that is deleted at midnight, and stores only the counts. A
                 person who comes back on several days counts once per day. Bots are not counted.
-                Details in the <Link href="/privacy">privacy notice</Link>.
             </p>
         </div>
     );

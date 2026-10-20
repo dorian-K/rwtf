@@ -785,8 +785,6 @@ function GymStuff() {
                         This Website is <a href="https://github.com/dorian-K/rwtf">open-source</a>!
                         {" · "}
                         <Link href="/stats">Usage stats</Link>
-                        {" · "}
-                        <Link href="/privacy">Privacy</Link>
                     </small>
                     <hr />
                     <h4>Embed</h4>
@@ -1253,6 +1251,11 @@ export default function Home() {
             <GymStuff />
             <StudyStuff />
             <StudySearch />
+            <footer className="text-center my-3" style={{ fontSize: "0.7rem" }}>
+                <Link href="/privacy" className="text-muted">
+                    Privacy
+                </Link>
+            </footer>
         </div>
     );
 }
