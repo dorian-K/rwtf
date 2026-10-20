@@ -5,6 +5,14 @@ import type { PoolConnection } from "mariadb";
 import { SAMPLE } from "./sample_data.js";
 import { downloadStreamFile, isAachener, searchStudyFiles, inspectStudyFile } from "./study.js";
 import { startGeoip } from "./geoip.js";
+import {
+    METRICS_TABLES,
+    flushMetrics,
+    getStats,
+    getViewers,
+    recordGymView,
+    startMetrics,
+} from "./metrics.js";
 import { rateLimit } from "express-rate-limit";
 import {
     buildFullWeek,
@@ -85,6 +93,7 @@ app.get("/api/v1/gym", async (req, res) => {
         res.status(400).send('{error: true, msg: "Invalid dayoffset"}');
         return;
     }
+    recordGymView(req);
 
     let conn: PoolConnection | undefined;
     try {
@@ -682,6 +691,10 @@ app.get("/api/v1/gym/history", async (req, res) => {
 });
 
 // GET /api/v1/gym/monthly - monthly aggregates
+// Public, anonymous usage counts (see metrics.ts).
+app.get("/api/v1/stats", getStats);
+app.get("/api/v1/stats/viewers", getViewers);
+
 app.get("/api/v1/gym/monthly", async (_req, res) => {
     let conn: PoolConnection | undefined;
     try {
@@ -1223,6 +1236,7 @@ const database_init = async () => {
         await conn.query(
             "CREATE INDEX IF NOT EXISTS idx_studyfiles_downloads ON studyfiles (download_count)",
         );
+        for (const sql of METRICS_TABLES) await conn.query(sql);
         console.log("Database initialized");
 
         if (conn) conn.end();
@@ -1242,6 +1256,7 @@ database_init()
     .then(() => {
         setInterval(gymCrawl, 1000 * 60 * 5); // 5 minutes
         gymCrawl();
+        startMetrics();
 
         const server = app.listen(port, () => {
             console.log(`Example app listening on port ${port}`);
@@ -1249,6 +1264,7 @@ database_init()
 
         process.on("SIGTERM", async () => {
             console.log("SIGTERM signal");
+            await flushMetrics().catch((err) => console.error("metrics:", err.message));
             await pool.end();
             server.close();
             process.exit(0);
