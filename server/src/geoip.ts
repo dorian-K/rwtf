@@ -1,7 +1,8 @@
 // Offline "is this IP in Aachen?" lookup for the study-material gate, so visitor IPs never leave
 // the server. Built from DB-IP's free IP-to-City Lite database (CC BY 4.0, https://db-ip.com):
 // the monthly CSV is streamed once, only the Aachen ranges are kept (a few hundred), and those are
-// cached on disk and refreshed monthly.
+// cached on disk. A daily check picks up each new monthly release; if downloads fail, the last good
+// ranges stay in use, and with no ranges at all the gate only lets the hardcoded networks through.
 
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -11,7 +12,6 @@ import { createGunzip } from "node:zlib";
 import ipaddr from "ipaddr.js";
 
 const CACHE_FILE = path.join(process.env.GEOIP_DIR ?? "./geoip", "aachen-ranges.json");
-const MAX_AGE_MS = 35 * 24 * 60 * 60 * 1000; // DB-IP publishes monthly
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 interface Cache {
@@ -23,7 +23,7 @@ interface Cache {
 
 // Sorted, non-overlapping ranges per family, as bigints for binary search.
 let ranges: { v4: [bigint, bigint][]; v6: [bigint, bigint][] } | undefined;
-let builtAt = 0;
+let source = ""; // URL of the database the ranges came from
 
 function toBigInt(addr: ipaddr.IPv4 | ipaddr.IPv6): bigint {
     return addr.toByteArray().reduce((acc, b) => (acc << 8n) | BigInt(b), 0n);
@@ -71,13 +71,19 @@ export async function parseAachenRanges(gz: Readable): Promise<Pick<Cache, "v4" 
     return { v4, v6 };
 }
 
-async function download(): Promise<Cache> {
-    // This month's file appears a few days into the month; fall back to last month's.
+const monthUrl = (back: number) => {
     const now = new Date();
+    const d = new Date(now.getFullYear(), now.getMonth() - back, 1);
+    const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    return `https://download.db-ip.com/free/dbip-city-lite-${month}.csv.gz`;
+};
+
+// Newest release not yet loaded: this month's file (published a few days into the month), else
+// last month's. Returns undefined when the newest available one is already loaded.
+async function download(): Promise<Cache | undefined> {
     for (const back of [0, 1]) {
-        const d = new Date(now.getFullYear(), now.getMonth() - back, 1);
-        const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-        const url = `https://download.db-ip.com/free/dbip-city-lite-${month}.csv.gz`;
+        const url = monthUrl(back);
+        if (url === source) return undefined;
         const res = await fetch(url);
         if (!res.ok || !res.body) continue;
         const parsed = await parseAachenRanges(Readable.fromWeb(res.body as any));
@@ -92,10 +98,10 @@ function load(cache: Cache) {
             .map(([a, b]): [bigint, bigint] => [BigInt(a), BigInt(b)])
             .sort((x, y) => (x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : 0));
     ranges = { v4: conv(cache.v4), v6: conv(cache.v6) };
-    builtAt = cache.builtAt;
+    source = cache.source;
 }
 
-// Load the cached ranges, downloading a fresh database if missing or older than a month.
+// Load the cached ranges, then download the newest monthly release if it isn't loaded yet.
 // Errors are logged; until ranges are loaded, isAachenIp() answers false.
 export async function refreshGeoip() {
     try {
@@ -106,10 +112,10 @@ export async function refreshGeoip() {
     } catch {
         // no usable cache yet
     }
-    if (ranges && Date.now() - builtAt < MAX_AGE_MS) return;
     try {
         const started = Date.now();
         const fresh = await download();
+        if (!fresh) return;
         await fs.mkdir(path.dirname(CACHE_FILE), { recursive: true });
         await fs.writeFile(CACHE_FILE, JSON.stringify(fresh));
         load(fresh);
