@@ -6,6 +6,7 @@ import { pipeline as streamPipeline } from "node:stream/promises";
 import type { Request, Response } from "express";
 import ipRangeCheck from "ip-range-check";
 import { getConnection } from "./db.js";
+import { isAachenIp } from "./geoip.js";
 import type { PoolConnection } from "mariadb";
 
 const FETCH_HEADERS = {
@@ -306,81 +307,26 @@ async function downloadStudyFunky(origUrl: string): Promise<CachedFile> {
     return result;
 }
 
-const valid_ip_ranges: string[] = [];
-const invalid_ip_ranges: string[] = [];
+// RWTH/private networks are allowed outright; anything else must geolocate to Aachen, using the
+// offline DB-IP ranges (geoip.ts), so the visitor's IP is never sent to a third party.
+const IP_RANGES = [
+    "134.130.0.0/16",
+    "137.226.0.0/16",
+    "134.61.0.0/16",
+    "2a00:8a60::/32",
+    "127.0.0.0/8",
+    "10.0.0.0/8",
+    "172.16.0.0/12",
+    "::1/128",
+    "89.0.0.0/15", // joergs ip, https://ipinfo.io/AS8422
+];
 
 export async function isAachener(req: Request, _res: Response) {
-    // check if ip in allowed list
-    const IP_RANGES = [
-        "134.130.0.0/16",
-        "137.226.0.0/16",
-        "134.61.0.0/16",
-        "2a00:8a60::/32",
-        "127.0.0.0/8",
-        "10.0.0.0/8",
-        "172.16.0.0/12",
-        "::1/128",
-        "89.0.0.0/15", // joergs ip, https://ipinfo.io/AS8422
-    ];
     const ip = req.ip;
     if (!ip) {
         return false;
     }
-    if (!IP_RANGES.some((range) => ipRangeCheck(ip, range))) {
-        // check cache first
-        if (invalid_ip_ranges.some((range) => ipRangeCheck(ip, range))) {
-            //console.log("Invalid IP", ip, "in invalid list");
-            return false;
-        }
-        if (!valid_ip_ranges.some((range) => ipRangeCheck(ip, range))) {
-            try {
-                const resp = await fetch(`https://ipapi.co/${ip}/json/`, {
-                    headers: {
-                        "User-Agent":
-                            "Mozilla/5.0 (X11; Linux x86_64; rv:141.0) Gecko/20100101 Firefox/141.0",
-                    },
-                });
-                const js: any = await resp.json();
-                //console.log(js);
-                if (js.error) {
-                    //console.log(js);
-                    //res.status(403).send({ error: true, msg: "Invalid IP" });
-                    return false;
-                }
-                if (js.city !== "Aachen") {
-                    console.log("Invalid city", js.city, "for IP", ip);
-                    //res.status(403).send({ error: true, msg: "Invalid IP" });
-                    // add to invalid list
-                    invalid_ip_ranges.push(js.network);
-                    if (invalid_ip_ranges.length > 1000) {
-                        invalid_ip_ranges.shift();
-                    }
-                    return false;
-                }
-                // add to valid list
-                if (js.version === "IPv6") {
-                    valid_ip_ranges.push(js.network);
-                } else {
-                    valid_ip_ranges.push(js.network);
-                }
-
-                if (valid_ip_ranges.length > 1000) {
-                    valid_ip_ranges.shift();
-                }
-
-                console.log("Valid IP", ip);
-            } catch (err) {
-                console.error("Failed to validate IP", ip, err);
-                return false;
-            }
-        } else {
-            //console.log("Loaded from cache");
-        }
-    } else {
-        //console.log("Valid IP in hardcoded", ip);
-    }
-
-    return true;
+    return IP_RANGES.some((range) => ipRangeCheck(ip, range)) || isAachenIp(ip);
 }
 
 // Search the studyfiles metadata table with a free-text query over the human-readable columns.

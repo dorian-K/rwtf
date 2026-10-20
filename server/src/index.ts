@@ -4,6 +4,7 @@ import getAuslastungNumber from "./gym_crawler.js";
 import type { PoolConnection } from "mariadb";
 import { SAMPLE } from "./sample_data.js";
 import { downloadStreamFile, isAachener, searchStudyFiles, inspectStudyFile } from "./study.js";
+import { startGeoip } from "./geoip.js";
 import { rateLimit } from "express-rate-limit";
 import {
     buildFullWeek,
@@ -1231,6 +1232,9 @@ const database_init = async () => {
         throw err;
     }
 };
+
+// Independent of the DB; the study gate only allows hardcoded ranges until this has loaded.
+startGeoip();
 
 // init database
 database_init()
