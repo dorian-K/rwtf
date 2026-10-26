@@ -24,4 +24,5 @@ COPY src/ ./src/
 COPY run.sh .
 RUN chmod +x run.sh
 
-CMD ["cron", "-f"]
+# one run at container start (cron's @reboot skips restarts of an existing container), then cron
+CMD ["sh", "-c", "/app/run.sh & exec cron -f"]
