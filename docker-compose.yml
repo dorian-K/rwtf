@@ -39,6 +39,7 @@ services:
       - TIMESTRAL_URL=http://timestral:8000
     volumes:
       - ./study_files:/tmp/study_files
+      - geoip-cache:/app/geoip
 
   # Timestral forecasting sidecar; only the server talks to it (no ports, not routed by nginx).
   timestral:
@@ -75,6 +76,7 @@ services:
       - screenshot-data:/data
 
 volumes:
+  geoip-cache:
   timestral-cache:
   webapp-content:
   screenshot-data:
