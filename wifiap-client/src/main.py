@@ -14,8 +14,11 @@ assert server_url, "SERVER_URL must be set in .env"
 
 def grab_data(url):
     # Fetch the page content
+    # The portal answers 406 to the old Chrome 58 UA / requests' default Accept
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:140.0) Gecko/20100101 Firefox/140.0",
+        "Accept": "text/html,application/xhtml+xml",
+        "Accept-Language": "de-DE,de;q=0.9",
     }
     response = requests.get(url, headers=headers)
     response.raise_for_status()
