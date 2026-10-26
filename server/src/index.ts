@@ -322,10 +322,18 @@ app.post("/api/v1/wifiap", limiterPost, express.json({ limit: "500kb" }), async 
                     [row.Name, row["Cover / Ort"], row.Gebäude, row.Organisation],
                 );
 
+                // offline APs may have no parseable "last online" date; one bad row would roll
+                // back the whole batch
+                const lastOnline = parse(
+                    row["Zuletzt als online geprüft"],
+                    "dd.MM.yyyy HH:mm",
+                    new Date(),
+                );
                 // check if the numbers are parseable ints
                 if (
                     Number.isNaN(parseInt(row["Nutzer 2.4 GHz"], 10)) ||
-                    Number.isNaN(parseInt(row["Nutzer 5 GHz"], 10))
+                    Number.isNaN(parseInt(row["Nutzer 5 GHz"], 10)) ||
+                    Number.isNaN(lastOnline.getTime())
                 ) {
                     console.error("Invalid data for wifiap", row);
                 } else {
@@ -337,11 +345,7 @@ app.post("/api/v1/wifiap", limiterPost, express.json({ limit: "500kb" }), async 
                             row["Nutzer 2.4 GHz"],
                             row["Nutzer 5 GHz"],
                             row.Online ? 1 : 0,
-                            parse(
-                                row["Zuletzt als online geprüft"],
-                                "dd.MM.yyyy HH:mm",
-                                new Date(),
-                            ),
+                            lastOnline,
                         ],
                     );
                     numAdded++;
