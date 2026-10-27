@@ -727,9 +727,9 @@ function GymStuff() {
                 </a>
                 )
                 {visits7d !== undefined && (
-                    <Link href="/stats" className="float-end small text-muted">
+                    <span className="float-end small text-muted">
                         {visits7d.toLocaleString("en-US")} visits in the last 7 days
-                    </Link>
+                    </span>
                 )}
             </div>
             <div className="card-body">
