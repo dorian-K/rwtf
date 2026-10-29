@@ -1,5 +1,5 @@
 # Dockerfile
-FROM node:lts
+FROM node:lts-trixie
 
 # Install required dependencies for Puppeteer
 RUN apt-get update && apt-get install -y \
@@ -8,7 +8,6 @@ RUN apt-get update && apt-get install -y \
     fonts-ipafont-gothic \
     fonts-wqy-zenhei \
     fonts-thai-tlwg \
-    fonts-kacst \
     fonts-symbola \
     fonts-noto \
     fonts-freefont-ttf \

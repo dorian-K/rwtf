@@ -1,5 +1,5 @@
 # Use a base image
-FROM node:lts
+FROM node:lts-trixie
 
 # Set the working directory
 WORKDIR /app

@@ -1,5 +1,5 @@
 # Same Node.js LTS image as the server
-FROM node:lts
+FROM node:lts-trixie
 
 # Set the working directory inside the container
 WORKDIR /app
