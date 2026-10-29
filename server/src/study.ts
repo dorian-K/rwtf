@@ -1,4 +1,3 @@
-import fetch from "node-fetch";
 import fs from "node:fs";
 import fsPromises from "node:fs/promises";
 import path from "node:path";
@@ -238,7 +237,7 @@ async function downloadStudyFunky(origUrl: string): Promise<CachedFile> {
             break;
         }
         // Drain the rejected body so the socket can be reused instead of leaking.
-        resp.body?.resume();
+        resp.body?.cancel().catch(() => {});
         if (candidates.length > 1) {
             console.log(
                 `Extension guess .${ext} rejected (${resp.status}, ${type || "no type"}) for ${docId}`,

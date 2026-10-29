@@ -1,4 +1,3 @@
-import fetch from "node-fetch";
 import sharp, { type Sharp } from "sharp";
 import { createCanvas } from "canvas";
 
