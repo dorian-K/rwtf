@@ -7,6 +7,7 @@ import {
     type StudyInspectResponse,
 } from "@/api/Backend";
 import { useBackendContext } from "@/components/BackendProvider";
+import { DESIGNS, type Design, useChartColors, useDesign } from "@/components/DesignProvider";
 import type { ApexOptions } from "apexcharts";
 import React from "react";
 import Link from "next/link";
@@ -51,6 +52,7 @@ function ChartImpl({
     gymLine: GymInterpLineResponse;
     method: GymPredictionMethod;
 }) {
+    const colors = useChartColors();
     const methodName = METHOD_NAMES[method];
     let todayReference: Date;
     if (gym.data_today.length > 0) {
@@ -167,7 +169,7 @@ function ChartImpl({
             },
         },
         grid: {
-            borderColor: "#5a5249",
+            borderColor: colors.grid,
             xaxis: {
                 lines: {
                     show: true,
@@ -1249,16 +1251,41 @@ function StudySearch() {
     );
 }
 
+function DesignSelect() {
+    const { design, setDesign } = useDesign();
+    return (
+        <label className="text-muted">
+            Design{" "}
+            <select
+                className="form-select form-select-sm d-inline-block w-auto py-0"
+                style={{ fontSize: "inherit" }}
+                value={design}
+                onChange={(e) => setDesign(e.target.value as Design)}
+            >
+                {DESIGNS.map((d) => (
+                    <option key={d.value} value={d.value}>
+                        {d.label}
+                    </option>
+                ))}
+            </select>
+        </label>
+    );
+}
+
 export default function Home() {
     return (
         <div className="container">
             <GymStuff />
             <StudyStuff />
             <StudySearch />
-            <footer className="text-center my-3" style={{ fontSize: "0.7rem" }}>
+            <footer
+                className="d-flex justify-content-center align-items-center gap-3 my-3"
+                style={{ fontSize: "0.7rem" }}
+            >
                 <Link href="/privacy" className="text-muted">
                     Privacy
                 </Link>
+                <DesignSelect />
             </footer>
         </div>
     );

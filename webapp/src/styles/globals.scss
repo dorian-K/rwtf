@@ -1,115 +1,126 @@
-// Warm charcoal colour scheme, matching dorianko.ch. The site always renders with
-// data-bs-theme="dark" (see _document.tsx), so only the dark variables matter.
-$body-bg-dark: #1a1917;
-$body-color-dark: #ebe5da;
-$body-emphasis-color-dark: #f5f0e6;
-$body-secondary-color-dark: rgba(235, 229, 218, 0.7);
-$body-secondary-bg-dark: #2c2926;
-$body-tertiary-color-dark: rgba(235, 229, 218, 0.5);
-$body-tertiary-bg-dark: #24221f;
-$border-color-dark: #45403a;
-$headings-color-dark: #f2ece1;
-$link-color-dark: #4dabf7;
-$link-hover-color-dark: #74c0fc;
-
-$headings-font-weight: 600;
-$card-border-radius: 12px;
-
 @import "bootstrap/scss/bootstrap";
 
+// Warm charcoal design, matching dorianko.ch. It is the default; <html data-design="classic">
+// (picked in the footer, see DesignProvider.tsx) falls back to plain Bootstrap dark.
 $font-mono: "Roboto Mono Variable", monospace;
+$border-warm: #45403a;
 $glow-outline: rgba(var(--bs-primary-rgb), 0.7);
 $glow-shadow: 0 0 0.9rem rgba(var(--bs-primary-rgb), 0.35);
 
-html {
-    background-color: $body-bg-dark;
-}
+html:not([data-design="classic"]) {
+    background-color: #1a1917;
 
-h1,
-h2,
-h3 {
-    font-family: $font-mono;
-}
-
-.text-white {
-    color: #f2ece1 !important;
-}
-
-.card {
-    --bs-card-bg: #2c2926;
-    --bs-card-color: #e6e0d5;
-    --bs-card-cap-bg: #33302c;
-    --bs-card-cap-color: #f5f0e6;
-    --bs-card-border-color: #{$border-color-dark};
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
-
-    .table {
-        --bs-table-bg: transparent;
+    // The site always renders with data-bs-theme="dark" (see _document.tsx).
+    [data-bs-theme="dark"] {
+        --bs-body-bg: #1a1917;
+        --bs-body-bg-rgb: 26, 25, 23;
+        --bs-body-color: #ebe5da;
+        --bs-body-color-rgb: 235, 229, 218;
+        --bs-emphasis-color: #f5f0e6;
+        --bs-emphasis-color-rgb: 245, 240, 230;
+        --bs-secondary-color: rgba(235, 229, 218, 0.7);
+        --bs-secondary-bg: #2c2926;
+        --bs-secondary-bg-rgb: 44, 41, 38;
+        --bs-tertiary-color: rgba(235, 229, 218, 0.5);
+        --bs-tertiary-bg: #24221f;
+        --bs-tertiary-bg-rgb: 36, 34, 31;
+        --bs-border-color: #{$border-warm};
+        --bs-heading-color: #f2ece1;
+        --bs-link-color: #4dabf7;
+        --bs-link-color-rgb: 77, 171, 247;
+        --bs-link-hover-color: #74c0fc;
+        --bs-link-hover-color-rgb: 116, 192, 252;
     }
-}
 
-.card-title {
-    color: #f5f0e6;
-}
-
-// Buttons look like the link buttons on dorianko.ch's cards and glow on hover.
-.btn {
-    outline: 2px solid transparent;
-    outline-offset: -1px;
-    transition:
-        outline-color 0.16s ease,
-        box-shadow 0.16s ease,
-        background-color 0.16s ease;
-
-    &:hover,
-    &:focus-visible {
-        outline-color: $glow-outline;
-        box-shadow: $glow-shadow;
+    h1,
+    h2,
+    h3 {
+        font-family: $font-mono;
     }
-}
 
-.btn-primary {
-    --bs-btn-bg: #4f4840;
-    --bs-btn-border-color: #8a8174;
-    --bs-btn-color: #fff8ee;
-    --bs-btn-font-weight: 600;
-    --bs-btn-hover-bg: #5a5249;
-    --bs-btn-hover-border-color: #8a8174;
-    --bs-btn-hover-color: #fff8ee;
-    --bs-btn-active-bg: #655c52;
-    --bs-btn-active-border-color: #8a8174;
-    --bs-btn-active-color: #fff8ee;
-    --bs-btn-disabled-bg: #3a3530;
-    --bs-btn-disabled-border-color: #5a5249;
-    --bs-btn-disabled-color: #a59d90;
-}
-
-.btn-outline-secondary {
-    --bs-btn-color: #e3dccf;
-    --bs-btn-border-color: #8a8174;
-    --bs-btn-hover-bg: #4f4840;
-    --bs-btn-hover-border-color: #8a8174;
-    --bs-btn-hover-color: #fff8ee;
-    --bs-btn-active-bg: #5a5249;
-    --bs-btn-active-border-color: #8a8174;
-    --bs-btn-active-color: #fff8ee;
-}
-
-@keyframes fadetranspin {
-    from {
-        opacity: 0.1;
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6 {
+        font-weight: 600;
     }
-    to {
-        opacity: 1;
+
+    .text-white {
+        color: #f2ece1 !important;
     }
-}
 
-.transitionin {
-    animation: fadetranspin 0.3s ease-in-out;
-}
+    .card {
+        --bs-card-bg: #2c2926;
+        --bs-card-color: #e6e0d5;
+        --bs-card-cap-bg: #33302c;
+        --bs-card-cap-color: #f5f0e6;
+        --bs-card-border-color: #{$border-warm};
+        --bs-card-border-radius: 12px;
+        --bs-card-inner-border-radius: 11px;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
 
-// ApexCharts' dark theme paints its own grey background; let the card show through.
-.apexcharts-canvas,
-.apexcharts-svg {
-    background: transparent !important;
+        // The classic design's bg-dark cards take the warm card colour here.
+        &.bg-dark {
+            background-color: var(--bs-card-bg) !important;
+        }
+
+        .table {
+            --bs-table-bg: transparent;
+        }
+    }
+
+    .card-title {
+        color: #f5f0e6;
+    }
+
+    // Buttons look like the link buttons on dorianko.ch's cards and glow on hover.
+    .btn {
+        outline: 2px solid transparent;
+        outline-offset: -1px;
+        transition:
+            outline-color 0.16s ease,
+            box-shadow 0.16s ease,
+            background-color 0.16s ease;
+
+        &:hover,
+        &:focus-visible {
+            outline-color: $glow-outline;
+            box-shadow: $glow-shadow;
+        }
+    }
+
+    .btn-primary {
+        --bs-btn-bg: #4f4840;
+        --bs-btn-border-color: #8a8174;
+        --bs-btn-color: #fff8ee;
+        --bs-btn-font-weight: 600;
+        --bs-btn-hover-bg: #5a5249;
+        --bs-btn-hover-border-color: #8a8174;
+        --bs-btn-hover-color: #fff8ee;
+        --bs-btn-active-bg: #655c52;
+        --bs-btn-active-border-color: #8a8174;
+        --bs-btn-active-color: #fff8ee;
+        --bs-btn-disabled-bg: #3a3530;
+        --bs-btn-disabled-border-color: #5a5249;
+        --bs-btn-disabled-color: #a59d90;
+    }
+
+    .btn-outline-secondary {
+        --bs-btn-color: #e3dccf;
+        --bs-btn-border-color: #8a8174;
+        --bs-btn-hover-bg: #4f4840;
+        --bs-btn-hover-border-color: #8a8174;
+        --bs-btn-hover-color: #fff8ee;
+        --bs-btn-active-bg: #5a5249;
+        --bs-btn-active-border-color: #8a8174;
+        --bs-btn-active-color: #fff8ee;
+    }
+
+    // ApexCharts' dark theme paints its own grey background; let the card show through.
+    .apexcharts-canvas,
+    .apexcharts-svg {
+        background: transparent !important;
+    }
 }

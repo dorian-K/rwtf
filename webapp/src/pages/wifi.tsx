@@ -2,6 +2,7 @@ import type React from "react";
 import { useEffect, useState, Suspense, lazy } from "react";
 import Link from "next/link";
 import { useBackendContext } from "@/components/BackendProvider";
+import { useChartColors } from "@/components/DesignProvider";
 import type { ApexOptions } from "apexcharts";
 import type { WifiBuildingResponse, WifiBuildingPredictResponse } from "@/api/Backend";
 
@@ -16,6 +17,7 @@ const ReactApexChart = lazy(() =>
 // ---------------------------------------------------------------------------
 
 function WifiHistoryChart({ data, hours }: { data: WifiBuildingResponse; hours: number }) {
+    const colors = useChartColors();
     const { current, history, building } = data;
 
     const lastUpdated = current.last_updated
@@ -50,7 +52,7 @@ function WifiHistoryChart({ data, hours }: { data: WifiBuildingResponse; hours: 
         fill: { type: "solid", opacity: 0.2 },
         dataLabels: { enabled: false },
         grid: {
-            borderColor: "#5a5249",
+            borderColor: colors.grid,
             xaxis: { lines: { show: true } },
         },
         noData: { text: "No data for this range", style: { color: "#aaa" } },
@@ -160,6 +162,7 @@ function WifiHistory({ building }: { building: string }) {
 // ---------------------------------------------------------------------------
 
 function WifiPredictionChart({ data }: { data: WifiBuildingPredictResponse }) {
+    const colors = useChartColors();
     const todayRef = new Date();
     // Map every point onto today's date while preserving its time of day, so the actual and
     // predicted curves line up on a single-day axis (mirrors the gym chart).
@@ -200,7 +203,7 @@ function WifiPredictionChart({ data }: { data: WifiBuildingPredictResponse }) {
         fill: { type: "solid", opacity: [0.3, 0.12, 0.22, 0.05] },
         dataLabels: { enabled: false },
         grid: {
-            borderColor: "#5a5249",
+            borderColor: colors.grid,
             xaxis: { lines: { show: true } },
         },
         noData: { text: "No data", style: { color: "#aaa" } },

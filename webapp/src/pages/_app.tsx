@@ -1,4 +1,5 @@
 import { BackendProvider } from "@/components/BackendProvider";
+import { DesignProvider } from "@/components/DesignProvider";
 import "@fontsource-variable/roboto-mono";
 import "@/styles/globals.scss";
 import type { AppProps } from "next/app";
@@ -20,7 +21,9 @@ export default function App({ Component, pageProps }: AppProps) {
                 <meta property="og:image:height" content="530" />
             </Head>
             <BackendProvider>
-                <Component {...pageProps} />
+                <DesignProvider>
+                    <Component {...pageProps} />
+                </DesignProvider>
             </BackendProvider>
         </>
     );

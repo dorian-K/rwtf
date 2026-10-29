@@ -41,8 +41,8 @@ export default function PrivacyPage() {
                 </li>
             </ul>
             <p>
-                Your browser only stores your chosen prediction method (local storage, never sent to
-                us).
+                Your browser only stores your chosen prediction method and design (local storage,
+                never sent to us).
             </p>
             <p>
                 <strong>Your rights:</strong> access, rectification, erasure, restriction,
