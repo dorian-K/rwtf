@@ -58,7 +58,7 @@ function WeeklyLineChart({ data }: { data: HistoryDataPoint[] }) {
         chart: {
             type: "area",
             height: 300,
-            foreColor: "#ffffff",
+            foreColor: "#ebe5da",
             toolbar: { show: true },
             zoom: { enabled: true },
         },
@@ -100,7 +100,7 @@ function WeeklyLineChart({ data }: { data: HistoryDataPoint[] }) {
         },
         legend: {
             labels: {
-                colors: "#ffffff",
+                colors: "#ebe5da",
             },
         },
     };
@@ -113,7 +113,7 @@ function WeeklyLineChart({ data }: { data: HistoryDataPoint[] }) {
     ];
 
     return (
-        <div className="card bg-dark shadow-lg mb-4">
+        <div className="card shadow-lg mb-4">
             <div className="card-header">
                 <h5 className="mb-0">Weekly Trend</h5>
             </div>
@@ -179,7 +179,7 @@ function MonthlyChart({ data }: { data: MonthlyDataPoint[] }) {
     ];
 
     return (
-        <div className="card bg-dark shadow-lg mb-4">
+        <div className="card shadow-lg mb-4">
             <div className="card-header">
                 <h5 className="mb-0">Monthly Comparison</h5>
             </div>
@@ -409,7 +409,7 @@ function HeatmapChart({ data }: { data: HeatmapDataPoint[] }) {
     }));
 
     return (
-        <div className="card bg-dark shadow-lg mb-4">
+        <div className="card shadow-lg mb-4">
             <div className="card-header">
                 <h5 className="mb-0">Hour x Day Heatmap</h5>
             </div>
@@ -560,7 +560,7 @@ function TrendsPage() {
 
             {monthlyData && monthlyData.length > 0 && (
                 <>
-                    <div className="card bg-dark shadow-lg mb-4">
+                    <div className="card shadow-lg mb-4">
                         <div className="card-header">
                             <h5 className="mb-0">Key Insights</h5>
                         </div>
@@ -667,7 +667,7 @@ function TrendsPage() {
             {weeklyData && weeklyData.length > 0 && <WeeklyLineChart data={weeklyData} />}
 
             {/*heatmapData && heatmapData.length > 0 && (
-                <div className="card bg-dark shadow-lg mb-4">
+                <div className="card shadow-lg mb-4">
                     <div className="card-header">
                         <h5 className="mb-0">When to Go</h5>
                     </div>
@@ -772,7 +772,7 @@ function TrendsPage() {
                 </div>
             )*/}
 
-            <div className="card bg-dark shadow-lg mb-4">
+            <div className="card shadow-lg mb-4">
                 <div className="card-header">
                     <h5 className="mb-0">Hourly & Weekly Patterns</h5>
                 </div>
@@ -790,7 +790,7 @@ function TrendsPage() {
 
             {heatmapData && heatmapData.length > 0 && <HeatmapChart data={heatmapData} />}
 
-            <div className="card bg-dark shadow-lg mb-4">
+            <div className="card shadow-lg mb-4">
                 <div className="card-header">
                     <h5 className="mb-0">About This Data</h5>
                 </div>

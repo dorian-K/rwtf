@@ -25,7 +25,7 @@ function shiftDay(day: string, by: number): string {
 
 function DailyChart({ daily }: { daily: StatsResponse["daily"] }) {
     const options: ApexOptions = {
-        chart: { type: "bar", height: 300, foreColor: "#ffffff", toolbar: { show: false } },
+        chart: { type: "bar", height: 300, foreColor: "#ebe5da", toolbar: { show: false } },
         dataLabels: { enabled: false },
         xaxis: { type: "datetime", labels: { datetimeUTC: false } },
         yaxis: { min: 0, decimalsInFloat: 0, title: { text: "Unique visitors" } },
@@ -52,7 +52,7 @@ function ViewersChart({ windows }: { windows: ViewersResponse["windows"] }) {
             type: "area",
             height: 300,
             stacked: true,
-            foreColor: "#ffffff",
+            foreColor: "#ebe5da",
             toolbar: { show: true },
             zoom: { enabled: true },
         },
@@ -62,7 +62,7 @@ function ViewersChart({ windows }: { windows: ViewersResponse["windows"] }) {
         yaxis: { min: 0, decimalsInFloat: 0, title: { text: "People with the site open" } },
         theme: { mode: "dark" },
         tooltip: { x: { format: "HH:mm" } },
-        legend: { labels: { colors: "#ffffff" } },
+        legend: { labels: { colors: "#ebe5da" } },
     };
     const series = (["dashboard", "embed"] as const).map((k) => ({
         name: k === "dashboard" ? "Website" : "Embedded widget",
@@ -118,7 +118,7 @@ export default function StatsPage() {
             {error && <div className="alert alert-danger">{error}</div>}
 
             {stats && (
-                <div className="card bg-dark shadow-lg mb-4">
+                <div className="card shadow-lg mb-4">
                     <div className="card-body">
                         <div className="row text-center">
                             <div className="col-md-4">
@@ -142,7 +142,7 @@ export default function StatsPage() {
             )}
 
             {stats && (
-                <div className="card bg-dark shadow-lg mb-4">
+                <div className="card shadow-lg mb-4">
                     <div className="card-header">
                         <h5 className="mb-0">Visitors per Day</h5>
                     </div>
@@ -153,7 +153,7 @@ export default function StatsPage() {
             )}
 
             {day && (
-                <div className="card bg-dark shadow-lg mb-4">
+                <div className="card shadow-lg mb-4">
                     <div className="card-header d-flex flex-wrap gap-2 align-items-center">
                         <h5 className="mb-0 me-auto">Over the Day (5-minute steps)</h5>
                         <div className="btn-group btn-group-sm">

@@ -167,7 +167,7 @@ function ChartImpl({
             },
         },
         grid: {
-            borderColor: "#636363",
+            borderColor: "#5a5249",
             xaxis: {
                 lines: {
                     show: true,

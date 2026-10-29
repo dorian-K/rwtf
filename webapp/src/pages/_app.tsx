@@ -1,4 +1,5 @@
 import { BackendProvider } from "@/components/BackendProvider";
+import "@fontsource-variable/roboto-mono";
 import "@/styles/globals.scss";
 import type { AppProps } from "next/app";
 import Head from "next/head";

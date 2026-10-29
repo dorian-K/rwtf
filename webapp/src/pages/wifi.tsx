@@ -50,7 +50,7 @@ function WifiHistoryChart({ data, hours }: { data: WifiBuildingResponse; hours: 
         fill: { type: "solid", opacity: 0.2 },
         dataLabels: { enabled: false },
         grid: {
-            borderColor: "#636363",
+            borderColor: "#5a5249",
             xaxis: { lines: { show: true } },
         },
         noData: { text: "No data for this range", style: { color: "#aaa" } },
@@ -200,7 +200,7 @@ function WifiPredictionChart({ data }: { data: WifiBuildingPredictResponse }) {
         fill: { type: "solid", opacity: [0.3, 0.12, 0.22, 0.05] },
         dataLabels: { enabled: false },
         grid: {
-            borderColor: "#636363",
+            borderColor: "#5a5249",
             xaxis: { lines: { show: true } },
         },
         noData: { text: "No data", style: { color: "#aaa" } },
