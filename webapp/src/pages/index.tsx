@@ -618,8 +618,16 @@ function CopyStation({ str }: { str: string }) {
     );
 }
 
+// The dates depend on the visitor's clock. Rendered during the static build, they would carry the
+// build date into the HTML, and hydration doesn't overwrite an input's value or min/max, so the form
+// is only rendered client-side, once today is known.
 function DataExportForm() {
-    const today = new Date();
+    const [today, setToday] = useState<Date>();
+    useEffect(() => setToday(new Date()), []);
+    return today ? <DataExportFields today={today} /> : null;
+}
+
+function DataExportFields({ today }: { today: Date }) {
     const formatDate = (d: Date) => {
         const year = d.getFullYear();
         const month = String(d.getMonth() + 1).padStart(2, "0");
@@ -765,7 +773,10 @@ function GymStuff() {
     const [visits7d, setVisits7d] = useState<number>();
 
     useEffect(() => {
-        api.isAachener().then(setIsAachen);
+        // A failed check leaves the button disabled, as for visitors outside Aachen.
+        api.isAachener()
+            .then(setIsAachen)
+            .catch(() => setIsAachen(false));
         if (Date.now() < SHOW_VISITS_FROM.getTime()) return;
         api.getStats()
             .then((s) => setVisits7d(s.visits7d))
@@ -939,11 +950,15 @@ function useStudyDownload() {
 
 function StudyStuff() {
     const api = useBackendContext();
-    const [aachener, setIsAachener] = useState<boolean>();
+    // null: the check failed (server error, rate limit, network), shown as such rather than as
+    // "outside Aachen".
+    const [aachener, setIsAachener] = useState<boolean | null>();
     const { download, pending, error, clearError } = useStudyDownload();
 
     useEffect(() => {
-        api.isAachener().then(setIsAachener);
+        api.isAachener()
+            .then(setIsAachener)
+            .catch(() => setIsAachener(null));
     }, [api]);
 
     if (aachener === undefined) {
@@ -955,6 +970,13 @@ function StudyStuff() {
     }
     if (aachener === false) {
         return <>Access more from within the RWTH network!</>;
+    }
+    if (aachener === null) {
+        return (
+            <div className="alert alert-warning mt-3">
+                Couldn't check whether you're on the RWTH network. Reload the page to try again.
+            </div>
+        );
     }
 
     const onSubmit = (e: React.SubmitEvent<HTMLFormElement>) => {
@@ -1125,7 +1147,9 @@ function StudyInspect({
 
 function StudySearch() {
     const api = useBackendContext();
-    const [aachener, setIsAachener] = useState<boolean>();
+    // null: the check failed (server error, rate limit, network), shown as such rather than as
+    // "outside Aachen".
+    const [aachener, setIsAachener] = useState<boolean | null>();
     const [q, setQ] = useState("");
     const [sort, setSort] = useState("downloads");
     const [page, setPage] = useState(1);
@@ -1142,7 +1166,9 @@ function StudySearch() {
     } = useStudyDownload();
 
     useEffect(() => {
-        api.isAachener().then(setIsAachener);
+        api.isAachener()
+            .then(setIsAachener)
+            .catch(() => setIsAachener(null));
     }, [api]);
 
     const runSearch = (targetPage: number) => {
@@ -1166,8 +1192,8 @@ function StudySearch() {
         return () => clearTimeout(tim);
     }, [api, aachener, q, sort]);
 
-    if (aachener === undefined || aachener === false) {
-        // Access gate is already shown by the StudyStuff card above; render nothing here.
+    if (!aachener) {
+        // Access gate (or its failure) is already shown by the StudyStuff card above; render nothing here.
         return null;
     }
 

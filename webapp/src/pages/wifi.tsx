@@ -350,10 +350,14 @@ export default function WifiPage() {
     const [selectedBuilding, setSelectedBuilding] = useState<string>("");
     const [error, setError] = useState<string | null>(null);
     const api = useBackendContext();
-    const [isAachen, setIsAachen] = useState<boolean | undefined>(undefined);
+    // null: the check failed (server error, rate limit, network), shown as such rather than as
+    // "outside Aachen".
+    const [isAachen, setIsAachen] = useState<boolean | null | undefined>(undefined);
 
     useEffect(() => {
-        api.isAachener().then(setIsAachen);
+        api.isAachener()
+            .then(setIsAachen)
+            .catch(() => setIsAachen(null));
     }, [api]);
 
     useEffect(() => {
@@ -391,7 +395,9 @@ export default function WifiPage() {
                     </Link>
                 </div>
                 <div className="alert alert-warning mt-3">
-                    WiFi usage data is only available from within the RWTH / Aachen network.
+                    {isAachen === null
+                        ? "Couldn't check whether you're on the RWTH / Aachen network. Reload the page to try again."
+                        : "WiFi usage data is only available from within the RWTH / Aachen network."}
                 </div>
             </div>
         );
