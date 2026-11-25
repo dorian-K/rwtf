@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import fsPromises from "node:fs/promises";
 import path from "node:path";
@@ -257,14 +258,18 @@ async function downloadStudyFunky(origUrl: string): Promise<CachedFile> {
     }
 
     const savePath = localPath(docId, ending);
-    // stream save file. pipeline() propagates stream errors as a rejection — a raw pipe() would
-    // emit an unhandled 'error' event and take the whole process down.
+    // Stream into a private temp file and rename it into place once complete, so a concurrent
+    // request's existsSync check never finds (and serves) a half-written file, and parallel first
+    // downloads of the same document don't write into or delete each other's file. pipeline()
+    // propagates stream errors as a rejection — a raw pipe() would emit an unhandled 'error' event
+    // and take the whole process down.
+    const tmpPath = `${savePath}.part-${randomUUID()}`;
     console.log("Downloading file...");
     try {
-        await streamPipeline(fileResponse.body!, fs.createWriteStream(savePath));
+        await streamPipeline(fileResponse.body!, fs.createWriteStream(tmpPath));
+        await fsPromises.rename(tmpPath, savePath);
     } catch (err) {
-        // don't leave a half-written file behind for the cache/existsSync checks to trip over
-        await fsPromises.rm(savePath, { force: true }).catch(() => {});
+        await fsPromises.rm(tmpPath, { force: true }).catch(() => {});
         throw err;
     }
     console.log("Downloaded file to", savePath);
