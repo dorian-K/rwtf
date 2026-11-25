@@ -1158,6 +1158,9 @@ function StudySearch() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [inspect, setInspect] = useState<StudyInspectResponse | null>(null);
+    // Only the latest search may fill the table; a slower one for an older query or page must not
+    // overwrite it.
+    const searchSeq = useRef(0);
     const {
         download,
         pending,
@@ -1173,15 +1176,21 @@ function StudySearch() {
 
     const runSearch = (targetPage: number) => {
         setLoading(true);
+        const seq = ++searchSeq.current;
         api.searchStudyFiles({ q, sort, page: targetPage, pageSize: 20 })
             .then((d) => {
+                if (seq !== searchSeq.current) return;
                 setResults(d.results);
                 setHasMore(d.has_more);
                 setPage(d.page);
                 setError(null);
             })
-            .catch((e) => setError(String(e)))
-            .finally(() => setLoading(false));
+            .catch((e) => {
+                if (seq === searchSeq.current) setError(String(e));
+            })
+            .finally(() => {
+                if (seq === searchSeq.current) setLoading(false);
+            });
     };
 
     // Debounced search whenever the query or sort changes; always resets to page 1.

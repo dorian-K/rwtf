@@ -85,6 +85,8 @@ export default function StatsPage() {
     // Set client-side: the static export is prerendered without the visitor's clock.
     const [day, setDay] = useState<string>();
     const [error, setError] = useState<string>();
+    // Kept apart from `error` so a later successful day can clear it without hiding a stats failure.
+    const [viewersError, setViewersError] = useState<string>();
 
     useEffect(() => {
         setDay(localDay(new Date()));
@@ -95,9 +97,20 @@ export default function StatsPage() {
 
     useEffect(() => {
         if (!day) return;
+        // Clicking through days quickly: a slower response for a previous day must not land last.
+        let current = true;
         api.getViewers(day)
-            .then(setViewers)
-            .catch((e) => setError(String(e)));
+            .then((v) => {
+                if (!current) return;
+                setViewers(v);
+                setViewersError(undefined);
+            })
+            .catch((e) => {
+                if (current) setViewersError(String(e));
+            });
+        return () => {
+            current = false;
+        };
     }, [api, day]);
 
     const today = stats?.daily.find((d) => d.day === day)?.uniques ?? 0;
@@ -118,7 +131,9 @@ export default function StatsPage() {
                 </Link>
             </div>
 
-            {error && <div className="alert alert-danger">{error}</div>}
+            {(error ?? viewersError) && (
+                <div className="alert alert-danger">{error ?? viewersError}</div>
+            )}
 
             {stats && (
                 <div className="card bg-dark shadow-lg mb-4">

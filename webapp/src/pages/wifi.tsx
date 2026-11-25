@@ -1,5 +1,5 @@
 import type React from "react";
-import { useEffect, useState, Suspense, lazy } from "react";
+import { useEffect, useRef, useState, Suspense, lazy } from "react";
 import Link from "next/link";
 import { useBackendContext } from "@/components/BackendProvider";
 import { useChartColors } from "@/components/DesignProvider";
@@ -93,21 +93,32 @@ function WifiHistoryChart({ data, hours }: { data: WifiBuildingResponse; hours: 
 
 function WifiHistory({ building }: { building: string }) {
     const [hours, setHours] = useState(24);
-    const [data, setData] = useState<WifiBuildingResponse | null>(null);
+    // The data with the range it was fetched for, so the chart title matches what it shows.
+    const [data, setData] = useState<{ d: WifiBuildingResponse; hours: number } | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
+    // Only the latest request may update the chart; a slower one for the previous building or range
+    // must not overwrite it.
+    const requestSeq = useRef(0);
     const api = useBackendContext();
 
     const loadData = () => {
         if (!building) return;
         setIsLoading(true);
-        api.getWifiBuilding(building, hours)
+        const seq = ++requestSeq.current;
+        const requested = hours;
+        api.getWifiBuilding(building, requested)
             .then((d) => {
-                setData(d);
+                if (seq !== requestSeq.current) return;
+                setData({ d, hours: requested });
                 setError(null);
             })
-            .catch((e) => setError(String(e)))
-            .finally(() => setIsLoading(false));
+            .catch((e) => {
+                if (seq === requestSeq.current) setError(String(e));
+            })
+            .finally(() => {
+                if (seq === requestSeq.current) setIsLoading(false);
+            });
     };
 
     // biome-ignore lint/correctness/useExhaustiveDependencies: rerun on the listed inputs only
@@ -151,7 +162,7 @@ function WifiHistory({ building }: { building: string }) {
                     </button>
                     {isLoading && <div className="spinner-border spinner-border-sm"></div>}
                 </div>
-                {data && <WifiHistoryChart data={data} hours={hours} />}
+                {data && <WifiHistoryChart data={data.d} hours={data.hours} />}
             </div>
         </div>
     );
@@ -287,18 +298,26 @@ function WifiPrediction({ building }: { building: string }) {
     const [data, setData] = useState<WifiBuildingPredictResponse | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
+    // Only the latest request may update the chart (see WifiHistory).
+    const requestSeq = useRef(0);
     const api = useBackendContext();
 
     const loadData = () => {
         if (!building) return;
         setIsLoading(true);
+        const seq = ++requestSeq.current;
         api.getWifiBuildingPredict(building)
             .then((d) => {
+                if (seq !== requestSeq.current) return;
                 setData(d);
                 setError(null);
             })
-            .catch((e) => setError(String(e)))
-            .finally(() => setIsLoading(false));
+            .catch((e) => {
+                if (seq === requestSeq.current) setError(String(e));
+            })
+            .finally(() => {
+                if (seq === requestSeq.current) setIsLoading(false);
+            });
     };
 
     // biome-ignore lint/correctness/useExhaustiveDependencies: rerun on the listed inputs only
