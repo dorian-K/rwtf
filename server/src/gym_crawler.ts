@@ -80,7 +80,9 @@ async function splitImg(img: Sharp): Promise<ImagePart[]> {
 
     return await Promise.all(
         digitParts.map(async (prt) => {
-            const extractWidth = Math.min(22, prt.end - prt.start);
+            // Real digits are 11-21 px wide; anything wider is touching glyphs or not a digit, and
+            // cropping it to one digit would store a wrong count.
+            const extractWidth = prt.end - prt.start;
             if (extractWidth < 8) {
                 throw new Error("Extracted width too small");
             }
@@ -244,6 +246,10 @@ export async function getAuslastungAndMatchNumbers(
 export default async function getAuslastungNumber(): Promise<number> {
     const pic = await getUptodatePic();
     const reconstructedDigits = await getAuslastungAndMatchNumbers(pic);
+    // An empty image (no digits) or more digits than the gym could hold is a misread, not a count.
+    if (reconstructedDigits.length < 1 || reconstructedDigits.length > 3) {
+        throw new Error(`Implausible reading: ${reconstructedDigits.length} digits`);
+    }
     return parseInt(reconstructedDigits.map((digit) => digit[0].toString()).join(""), 10);
 }
 
