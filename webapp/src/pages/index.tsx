@@ -50,23 +50,24 @@ function ChartImpl({
     gym,
     gymLine,
     method,
+    dayoffset,
 }: {
     gym: GymResponse;
     gymLine: GymInterpLineResponse;
     method: GymPredictionMethod;
+    dayoffset: number;
 }) {
     const colors = useChartColors();
     const methodName = METHOD_NAMES[method];
+    // The day the chart shows. Future days (and today before opening) have no samples yet, so it
+    // comes from the clock, not from historic data: that would date the axis weeks back, and show
+    // "No data" whenever the gym happened to be closed on that day back then.
     let todayReference: Date;
     if (gym.data_today.length > 0) {
         todayReference = new Date(gym.data_today[0].created_at);
-    } else if (
-        gym.data_historic.length > 0 &&
-        gym.data_historic[gym.data_historic.length - 1].length > 0
-    ) {
-        todayReference = new Date(gym.data_historic[gym.data_historic.length - 1][0].created_at);
     } else {
-        return <div>No data</div>;
+        todayReference = new Date();
+        todayReference.setDate(todayReference.getDate() + dayoffset);
     }
 
     const adjustDate = (d: Date | string) => {
@@ -521,6 +522,7 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
                                 gym={gym}
                                 gymLine={gymLine && lineDay === gymDay ? gymLine : NO_LINE}
                                 method={lineMethod}
+                                dayoffset={gymDay ?? 0}
                             />
                         </Suspense>
                     </div>
