@@ -58,6 +58,20 @@ app.use(limiter_burst);
 
 const port = 4000;
 
+// The highest gym count ever recorded, read from the DB once and then kept current by
+// saveAuslastung, so gym_interpline doesn't scan the whole table (no index on auslastung).
+let allTimeHigh: number | undefined;
+
+async function getAllTimeHigh(conn: PoolConnection): Promise<number> {
+    if (allTimeHigh === undefined) {
+        const rows = await conn.query("SELECT MAX(auslastung) as max_auslastung FROM rwth_gym");
+        const max = rows[0]?.max_auslastung;
+        if (max == null) return 0; // empty table: ask again next time
+        allTimeHigh = max;
+    }
+    return allTimeHigh as number;
+}
+
 async function saveAuslastung(auslastung: number) {
     let conn: PoolConnection;
 
@@ -67,6 +81,7 @@ async function saveAuslastung(auslastung: number) {
             return conn.query("INSERT INTO rwth_gym (auslastung) VALUES (?)", [auslastung]);
         })
         .then(() => {
+            if (allTimeHigh !== undefined) allTimeHigh = Math.max(allTimeHigh, auslastung);
             conn.end();
         })
         .catch((err) => {
@@ -243,15 +258,7 @@ app.get("/api/v1/gym_interpline", async (req, res) => {
             created_at: p.created_at,
         }));
 
-        // calculate all time high
-        let allTimeHigh = await conn.query(
-            "SELECT MAX(auslastung) as max_auslastung FROM rwth_gym",
-        );
-        if (allTimeHigh.length > 0) {
-            allTimeHigh = allTimeHigh[0].max_auslastung;
-        } else {
-            allTimeHigh = 0;
-        }
+        const high = await getAllTimeHigh(conn);
 
         const endTime = new Date();
         const queryMs = endTime.getTime() - startTime.getTime();
@@ -262,7 +269,7 @@ app.get("/api/v1/gym_interpline", async (req, res) => {
         res.json({
             interpLine: interpLine,
             queryMs: queryMs,
-            allTimeHigh: allTimeHigh,
+            allTimeHigh: high,
         });
     } catch (err) {
         console.error(err);

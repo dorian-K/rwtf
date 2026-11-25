@@ -208,10 +208,18 @@ export class Backend {
         );
     }
 
+    private aachener?: Promise<boolean>;
+
+    // Asked by several components per page; the answer doesn't change within a visit, so they share
+    // one request. A failed check isn't kept, so the next caller retries.
     isAachener(): Promise<boolean> {
-        return this.processResponse(this.fetch("/api/v1/is_aachen")).then(
-            (data: any) => data.status,
-        );
+        this.aachener ??= this.processResponse(this.fetch("/api/v1/is_aachen"))
+            .then((data: any) => data.status)
+            .catch((err) => {
+                this.aachener = undefined;
+                throw err;
+            });
+        return this.aachener;
     }
 
     getStudyUrl(url: string): string {

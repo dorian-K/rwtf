@@ -11,10 +11,13 @@ import { DESIGNS, type Design, useChartColors, useDesign } from "@/components/De
 import type { ApexOptions } from "apexcharts";
 import React from "react";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { EMBED_CODE } from "./embed_gym";
 
-const ReactApexChart = React.lazy(() => import("react-apexcharts"));
+// The chart chunk is the largest in the build; GymPlotWithHandles starts fetching it on mount, in
+// parallel with the data, rather than only once the data has arrived and the chart first renders.
+const loadApexCharts = () => import("react-apexcharts");
+const ReactApexChart = React.lazy(loadApexCharts);
 
 // ApexCharts' default palette tail, used for the (hidden-by-default) "x weeks ago" series. We set
 // colors explicitly so inserting the confidence-band series doesn't reshuffle the other series'
@@ -338,6 +341,19 @@ function ChartImpl({
     );
 }
 
+// Stands in for the prediction until it arrives, so the actual curve can show without it.
+const NO_LINE: GymInterpLineResponse = { interpLine: [], allTimeHigh: 0 };
+
+function ChartSpinner() {
+    return (
+        <div className="d-flex h-100 align-items-center justify-content-center">
+            <div className="spinner-border text-secondary" role="status">
+                <span className="visually-hidden">Loading chart</span>
+            </div>
+        </div>
+    );
+}
+
 // "Today", "Tomorrow", then weekday names for the remaining day tabs.
 function dayLabels(): string[] {
     return [0, 1, 2, 3].map((offset) => {
@@ -352,8 +368,16 @@ function dayLabels(): string[] {
 export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: boolean }) {
     const [gym, setGym] = useState<GymResponse>();
     const [gymLine, setGymLine] = useState<GymInterpLineResponse>();
+    // The days the shown gym data and line belong to; a line for another day is not drawn.
+    const [gymDay, setGymDay] = useState<number>();
+    const [lineDay, setLineDay] = useState<number>();
     const [error, setError] = useState<string>();
+    // Kept apart from `error` so the gym data arriving after a failed line doesn't clear it.
+    const [lineError, setLineError] = useState<string>();
     const [isLoading, setIsLoading] = useState(true);
+    // A load the visitor started (reload, day, method), as opposed to the background poll; the
+    // chart is dimmed meanwhile so it is clear the shown data is about to change.
+    const [isRefreshing, setIsRefreshing] = useState(false);
 
     // Weekday names depend on the visitor's clock, so the static export ships placeholders and
     // reloadData fills in the real names (keeping them right across midnight).
@@ -370,6 +394,12 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
     // superseded by the visitor's saved choice) must not overwrite it.
     const requestSeq = useRef(0);
     const api = useBackendContext();
+
+    useEffect(() => {
+        loadApexCharts().catch(() => {
+            // React.lazy retries and surfaces the failure when the chart renders
+        });
+    }, []);
 
     // Restore the visitor's last choice (static export: localStorage is only available client-side).
     useEffect(() => {
@@ -392,50 +422,66 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
         }
     };
 
-    const reloadData = () => {
+    const reloadData = (background = false) => {
         setDays(dayLabels());
         setIsLoading(true);
+        if (!background) setIsRefreshing(true);
         const seq = ++requestSeq.current;
         const requested = method;
+        const day = dayoffset;
         // The Timestral model runs in a separate service that may be down; fall back to Similar
         // Weeks rather than leaving the chart empty.
         const line =
             requested === "timestral"
                 ? api
-                      .getGymInterpLine(dayoffset, "timestral")
+                      .getGymInterpLine(day, "timestral")
                       .then((l) => ({ line: l, used: requested }))
                       .catch(() =>
                           api
-                              .getGymInterpLine(dayoffset, "closest")
+                              .getGymInterpLine(day, "closest")
                               .then((l) => ({ line: l, used: "closest" as GymPredictionMethod })),
                       )
-                : api
-                      .getGymInterpLine(dayoffset, requested)
-                      .then((l) => ({ line: l, used: requested }));
-        const prom = Promise.all([api.getGym(dayoffset), line]);
-        prom.then(([g, l]) => {
-            if (seq !== requestSeq.current) return;
-            setGym(g);
-            setGymLine(l.line);
-            setLineMethod(l.used);
-            setLineRequested(requested);
-            setNotice(
-                l.used !== requested
-                    ? "The Timestral forecast is unavailable right now, showing Similar Weeks instead."
-                    : undefined,
-            );
-            setError(undefined);
-        })
+                : api.getGymInterpLine(day, requested).then((l) => ({ line: l, used: requested }));
+        // Show the actual curve as soon as it arrives; the prediction (slow while Timestral warms up)
+        // is added when it lands.
+        const gymDone = api
+            .getGym(day)
+            .then((g) => {
+                if (seq !== requestSeq.current) return;
+                setGym(g);
+                setGymDay(day);
+                setError(undefined);
+            })
             .catch((err) => {
                 if (seq !== requestSeq.current) return;
                 setGym(undefined);
+                setError(err + "");
+            });
+        const lineDone = line
+            .then((l) => {
+                if (seq !== requestSeq.current) return;
+                setGymLine(l.line);
+                setLineDay(day);
+                setLineMethod(l.used);
+                setLineRequested(requested);
+                setLineError(undefined);
+                setNotice(
+                    l.used !== requested
+                        ? "The Timestral forecast is unavailable right now, showing Similar Weeks instead."
+                        : undefined,
+                );
+            })
+            .catch((err) => {
+                if (seq !== requestSeq.current) return;
                 setGymLine(undefined);
                 setNotice(undefined);
-                setError(err + "");
-            })
-            .then(() => {
-                if (seq === requestSeq.current) setIsLoading(false);
+                setLineError(err + "");
             });
+        Promise.all([gymDone, lineDone]).then(() => {
+            if (seq !== requestSeq.current) return;
+            setIsLoading(false);
+            setIsRefreshing(false);
+        });
     };
 
     // The selector shows the method actually on the chart (so a fallback is visible there too),
@@ -448,7 +494,7 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
 
         const tim = setInterval(
             () => {
-                reloadData();
+                reloadData(true);
             },
             1000 * 60 * 4,
         ); // 4 minutes
@@ -460,12 +506,27 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
 
     return (
         <>
-            {error && <div className="alert alert-danger">{error}</div>}
+            {(error ?? lineError) && <div className="alert alert-danger">{error ?? lineError}</div>}
             {notice && !hideHandles && (
                 <div className="alert alert-warning py-1 small">{notice}</div>
             )}
             <div style={{ height: "500px" }}>
-                {gym && gymLine && <ChartImpl gym={gym} gymLine={gymLine} method={lineMethod} />}
+                {gym ? (
+                    <div
+                        className="h-100"
+                        style={{ opacity: isRefreshing ? 0.5 : 1, transition: "opacity 0.2s" }}
+                    >
+                        <Suspense fallback={<ChartSpinner />}>
+                            <ChartImpl
+                                gym={gym}
+                                gymLine={gymLine && lineDay === gymDay ? gymLine : NO_LINE}
+                                method={lineMethod}
+                            />
+                        </Suspense>
+                    </div>
+                ) : (
+                    !error && <ChartSpinner />
+                )}
             </div>
 
             {hideHandles === false && (
@@ -473,7 +534,7 @@ export function GymPlotWithHandles({ hideHandles = false }: { hideHandles?: bool
                     <button
                         type="button"
                         className="btn btn-primary me-2"
-                        onClick={reloadData}
+                        onClick={() => reloadData()}
                         disabled={isLoading}
                     >
                         Reload
