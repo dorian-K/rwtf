@@ -26,7 +26,7 @@ WORKDIR /app
 # Copy package files
 COPY package.json package-lock.json* ./
 
-RUN npm install
+RUN npm ci
 
 COPY run.sh .
 RUN chmod +x run.sh
